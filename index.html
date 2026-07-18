@@ -263,6 +263,30 @@
   #lock-screen .lock-icon{ font-size:40px; }
   #lock-screen .lock-title{ font-size:18px; font-weight:800; }
   #lock-screen .lock-sub{ font-size:14px; color:var(--ink-soft); font-weight:600; max-width:280px; }
+  #lock-request-btn{
+    margin-top:18px;
+    padding:12px 22px; border-radius:999px;
+    background:var(--primary); color:#fff;
+    font-weight:700; font-size:14px;
+  }
+  #lock-request-panel{ display:none; margin-top:20px; width:100%; max-width:300px; }
+  #lock-request-panel.open{ display:block; }
+  #lock-id-box{
+    background:var(--surface); border-radius:var(--radius);
+    padding:14px; box-shadow:0 2px 10px rgba(38,49,43,.06);
+  }
+  #lock-id-box .lock-id-label{ font-size:11px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  #lock-id-box .lock-id-value{ font-size:20px; font-weight:800; margin-top:4px; }
+  #lock-copy-btn{
+    margin-top:10px; width:100%; padding:10px; border-radius:var(--radius-sm);
+    background:var(--surface-2); color:var(--ink); font-weight:700; font-size:13px;
+  }
+  #lock-tg-link{
+    display:block; margin-top:10px; width:100%; padding:12px; border-radius:var(--radius-sm);
+    background:var(--primary); color:#fff; font-weight:700; font-size:14px;
+    text-decoration:none; box-sizing:border-box;
+  }
+  #lock-request-panel .lock-hint{ margin-top:10px; font-size:12px; color:var(--ink-soft); font-weight:600; line-height:1.5; }
 </style>
 </head>
 <body>
@@ -270,7 +294,17 @@
 <div id="lock-screen">
   <div class="lock-icon">🔒</div>
   <div class="lock-title">Этот трекер приватный</div>
-  <div class="lock-sub">Доступен только владельцу</div>
+  <div class="lock-sub">Доступен только по приглашению</div>
+  <button type="button" id="lock-request-btn">Запросить доступ</button>
+  <div id="lock-request-panel">
+    <div id="lock-id-box">
+      <div class="lock-id-label">Твой Telegram ID</div>
+      <div class="lock-id-value" id="lock-id-value">—</div>
+      <button type="button" id="lock-copy-btn">Скопировать ID</button>
+    </div>
+    <a href="https://t.me/Arina_Kocherova" target="_blank" rel="noopener" id="lock-tg-link">Написать Арине →</a>
+    <div class="lock-hint">Скопируй ID выше и отправь его Арине вместе с просьбой дать доступ к трекеру.</div>
+  </div>
 </div>
 
 <div id="app-shell">
@@ -414,18 +448,38 @@
       else cb(window.confirm(msg));
     }
 
-    // Личный трекер — открывать может только владелец. Проверка на стороне
-    // клиента (initDataUnsafe не подписан криптографически без бэкенда),
-    // но отсекает случайных людей, которые найдут бота и нажмут кнопку меню.
-    const OWNER_ID = 863166479;
-    function isAuthorized(){
-      try {
-        const uid = tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id;
-        return uid === OWNER_ID;
-      } catch(e) { return false; }
+    function currentUser(){
+      try { return (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || null; }
+      catch(e) { return null; }
     }
 
-    return { raw: tg, init, haptic, notify, alertMsg, confirmMsg, isAuthorized };
+    return { raw: tg, init, haptic, notify, alertMsg, confirmMsg, currentUser };
+  })();
+
+  // ============ Auth (allowlist из allowed-users.json в этом же репозитории) ============
+  // Проверка на стороне клиента (initDataUnsafe не подписан криптографически
+  // без бэкенда) — отсекает случайных людей, не защита от целенаправленной атаки.
+  const Auth = (() => {
+    let allowedIds = [];
+
+    async function loadAllowed(){
+      try {
+        const res = await fetch('allowed-users.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error('bad status ' + res.status);
+        const data = await res.json();
+        allowedIds = Array.isArray(data) ? data.map(u => typeof u === 'object' ? u.id : u) : [];
+      } catch(e) {
+        allowedIds = [];
+      }
+    }
+
+    function isAuthorized(){
+      const user = TG.currentUser();
+      if (!user) return false;
+      return allowedIds.indexOf(user.id) !== -1;
+    }
+
+    return { loadAllowed, isAuthorized };
   })();
 
   // ============ Storage layer ============
@@ -974,12 +1028,31 @@
   }
 
   // ============ App ============
+  function wireLockScreen(){
+    const user = TG.currentUser();
+    document.getElementById('lock-request-btn').addEventListener('click', () => {
+      document.getElementById('lock-id-value').textContent = user ? String(user.id) : '—';
+      document.getElementById('lock-request-panel').classList.add('open');
+    });
+    document.getElementById('lock-copy-btn').addEventListener('click', async () => {
+      const id = user ? String(user.id) : '';
+      try {
+        await navigator.clipboard.writeText(id);
+        document.getElementById('lock-copy-btn').textContent = 'Скопировано ✓';
+      } catch(e) {
+        document.getElementById('lock-copy-btn').textContent = 'Скопируй вручную: ' + id;
+      }
+    });
+  }
+
   async function boot(){
     TG.init();
+    await Auth.loadAllowed();
 
-    if (!TG.isAuthorized()) {
+    if (!Auth.isAuthorized()) {
       document.getElementById('lock-screen').classList.add('show');
       document.getElementById('app-shell').style.display = 'none';
+      wireLockScreen();
       return;
     }
 
