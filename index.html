@@ -133,17 +133,17 @@
 
   /* ---------- Habits ---------- */
   .habit-row{
-    display:flex; align-items:center; gap:12px;
     padding:12px 4px;
     border-bottom:1px solid var(--line);
   }
   .habit-row:last-child{ border-bottom:none; }
+  .habit-row-top{ display:flex; align-items:center; gap:12px; }
   .habit-emoji{ font-size:24px; flex:none; width:32px; text-align:center; }
   .habit-info{ flex:1; min-width:0; }
-  .habit-name{ font-weight:700; font-size:15px; }
+  .habit-name{ font-weight:700; font-size:15px; overflow-wrap:break-word; }
   .habit-streak{ margin-top:2px; font-size:12px; color:var(--ink-soft); font-weight:600; }
   .habit-streak.on{ color:var(--primary); }
-  .dot-strip{ display:flex; gap:5px; flex:none; }
+  .dot-strip{ display:flex; gap:5px; flex:none; margin-top:10px; padding-left:44px; }
   .dot{
     width:24px; height:24px; border-radius:8px;
     background:var(--surface-2);
@@ -820,13 +820,15 @@
         }).join('');
         return `
           <div class="habit-row">
-            <div class="habit-emoji">${h.emoji}</div>
-            <div class="habit-info">
-              <div class="habit-name">${escapeHtml(h.name)}</div>
-              <div class="habit-streak${streak>0?' on':''}">${streak>0 ? '🔥 ' + streak + (streak===1?' день':streak<5?' дня':' дней') : 'нет серии'}</div>
+            <div class="habit-row-top">
+              <div class="habit-emoji">${h.emoji}</div>
+              <div class="habit-info">
+                <div class="habit-name">${escapeHtml(h.name)}</div>
+                <div class="habit-streak${streak>0?' on':''}">${streak>0 ? '🔥 ' + streak + (streak===1?' день':streak<5?' дня':' дней') : 'нет серии'}</div>
+              </div>
+              <button type="button" class="habit-menu-btn" data-archive="${h.id}">⋯</button>
             </div>
             <div class="dot-strip">${dots}</div>
-            <button type="button" class="habit-menu-btn" data-archive="${h.id}">⋯</button>
           </div>`;
       }).join('');
 
