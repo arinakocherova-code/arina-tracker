@@ -456,18 +456,26 @@
     return { raw: tg, init, haptic, notify, alertMsg, confirmMsg, currentUser };
   })();
 
-  // ============ Auth (allowlist из allowed-users.json в этом же репозитории) ============
+  // ============ Auth (allowlist из allowed-ids.txt в этом же репозитории) ============
   // Проверка на стороне клиента (initDataUnsafe не подписан криптографически
   // без бэкенда) — отсекает случайных людей, не защита от целенаправленной атаки.
   const Auth = (() => {
     let allowedIds = [];
 
+    // Простой построчный формат вместо JSON — его нельзя случайно сломать
+    // лишней/недостающей запятой или скобкой при ручном редактировании на
+    // github.com. Каждая строка: "<id> необязательное имя". Пустые строки
+    // и строки без числа в начале — игнорируются.
     async function loadAllowed(){
       try {
-        const res = await fetch('allowed-users.json', { cache: 'no-store' });
+        const res = await fetch('allowed-ids.txt', { cache: 'no-store' });
         if (!res.ok) throw new Error('bad status ' + res.status);
-        const data = await res.json();
-        allowedIds = Array.isArray(data) ? data.map(u => typeof u === 'object' ? u.id : u) : [];
+        const text = await res.text();
+        allowedIds = text.split('\n')
+          .map(line => line.trim())
+          .filter(Boolean)
+          .map(line => parseInt(line, 10))
+          .filter(id => !isNaN(id));
       } catch(e) {
         allowedIds = [];
       }
