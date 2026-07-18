@@ -355,7 +355,7 @@
     background:var(--primary-fill); color:#fff; font-weight:700; font-size:14px;
     text-decoration:none; box-sizing:border-box;
   }
-  #lock-request-panel .lock-hint{ margin-top:10px; font-size:12px; color:var(--ink-soft); font-weight:600; line-height:1.5; }
+  .lock-hint{ margin-top:10px; font-size:12px; color:var(--ink-soft); font-weight:600; line-height:1.5; }
 
   /* ---------- Шапка: тема + обратная связь ---------- */
   .app-header-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
@@ -418,8 +418,8 @@
       <div class="lock-id-value" id="lock-id-value">—</div>
       <button type="button" id="lock-copy-btn">Скопировать ID</button>
     </div>
-    <a href="https://t.me/Arina_Kocherova" target="_blank" rel="noopener" id="lock-tg-link">Написать Арине →</a>
-    <div class="lock-hint">Скопируй ID выше и отправь его Арине вместе с просьбой дать доступ к трекеру.</div>
+    <button type="button" id="lock-tg-link">Написать Арине →</button>
+    <div class="lock-hint">Нажми «Написать Арине» — ID скопируется автоматически, останется вставить его в сообщение (долгое нажатие на поле ввода → «Вставить»).</div>
   </div>
 </div>
 
@@ -442,9 +442,9 @@
       <div class="modal-title">Что улучшить?</div>
       <textarea id="feedback-text" maxlength="500" placeholder="Напиши, чего не хватает или что поправить"></textarea>
       <div class="modal-actions">
-        <button type="button" id="feedback-copy-btn" class="btn btn-ghost">Скопировать текст</button>
-        <a href="https://t.me/Arina_Kocherova" target="_blank" rel="noopener" class="btn btn-primary">Написать Арине →</a>
+        <button type="button" id="feedback-tg-btn" class="btn btn-primary">Написать Арине →</button>
       </div>
+      <div class="lock-hint">Текст скопируется автоматически — останется вставить его в чат (долгое нажатие → «Вставить»).</div>
       <button type="button" class="modal-close" id="feedback-close-btn">Закрыть</button>
     </div>
   </div>
@@ -1511,6 +1511,22 @@
   }
 
   // ============ App ============
+  function openTelegramChat(url){
+    if (TG.raw && typeof TG.raw.openTelegramLink === 'function') TG.raw.openTelegramLink(url);
+    else window.open(url, '_blank');
+  }
+
+  async function copyThenOpenChat(text, btn, emptyMsg){
+    if (!text) { Toast.show(emptyMsg); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      Toast.show('Скопировано — вставь текст в чат (долгое нажатие → «Вставить»)');
+    } catch(e) {
+      Toast.show('Не получилось скопировать — выдели текст вручную: ' + text);
+    }
+    openTelegramChat('https://t.me/Arina_Kocherova');
+  }
+
   function wireLockScreen(){
     const user = TG.currentUser();
     document.getElementById('lock-request-btn').addEventListener('click', () => {
@@ -1526,21 +1542,19 @@
         document.getElementById('lock-copy-btn').textContent = 'Скопируй вручную: ' + id;
       }
     });
+    document.getElementById('lock-tg-link').addEventListener('click', () => {
+      const id = user ? String(user.id) : '';
+      copyThenOpenChat(id, null, 'ID недоступен — напиши Арине вручную');
+    });
   }
 
   function wireFeedback(){
     const panel = document.getElementById('feedback-panel');
     document.getElementById('feedback-btn').addEventListener('click', () => panel.classList.add('open'));
     document.getElementById('feedback-close-btn').addEventListener('click', () => panel.classList.remove('open'));
-    document.getElementById('feedback-copy-btn').addEventListener('click', async () => {
+    document.getElementById('feedback-tg-btn').addEventListener('click', () => {
       const text = document.getElementById('feedback-text').value.trim();
-      if (!text) { Toast.show('Сначала напиши что-нибудь'); return; }
-      try {
-        await navigator.clipboard.writeText(text);
-        Toast.show('Скопировано — вставь в чат с Ариной');
-      } catch(e) {
-        Toast.show('Не получилось скопировать — выдели текст вручную');
-      }
+      copyThenOpenChat(text, null, 'Сначала напиши что-нибудь');
     });
   }
 
