@@ -1,0 +1,27 @@
+name: Напоминание про трекер
+
+on:
+  schedule:
+    - cron: '3 17 * * *'   # 20:03 по Москве (UTC+3) каждый день
+  workflow_dispatch: {}     # можно запустить вручную кнопкой Run workflow — для проверки
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Разослать напоминания всем из allowed-ids.txt
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          TEXT="Не забудь заглянуть в трекер сегодня 🌿"
+          while IFS= read -r line; do
+            id=$(echo "$line" | awk '{print $1}')
+            if [[ "$id" =~ ^[0-9]+$ ]]; then
+              resp=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${id}" \
+                --data-urlencode "text=${TEXT}")
+              echo "id=${id} response=${resp}"
+            fi
+          done < allowed-ids.txt
