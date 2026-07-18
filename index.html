@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="color-scheme" content="light">
+<title>Трекер</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --bg:#EFF2EC;
+    --surface:#FFFFFF;
+    --surface-2:#E3E8DE;
+    --ink:#26312B;
+    --ink-soft:#5C6B60;
+    --line:#D7DED2;
+
+    --primary:#4B6B57;
+    --primary-soft:#DCE6DA;
+    --mood:#D6A24C;
+    --mood-soft:#F3E6C8;
+    --tasks:#6E7F93;
+    --tasks-soft:#E1E6EC;
+
+    --danger:#B75C4F;
+    --danger-soft:#F1DCD8;
+    --radius:16px;
+    --radius-sm:10px;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); }
+  body{
+    font-family:'Manrope','Segoe UI',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+  }
+  .mono{ font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+  button{ font-family:inherit; border:none; background:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  input,textarea{ font-family:inherit; }
+
+  #app-shell{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .app-header{
+    padding:calc(env(safe-area-inset-top,0px) + 20px) 20px 14px;
+    background:var(--bg);
+  }
+  .app-header .greeting{ font-size:22px; font-weight:800; letter-spacing:-.01em; }
+  .app-header .date{ margin-top:2px; font-size:13px; color:var(--ink-soft); font-weight:600; }
+
+  .app-main{
+    flex:1;
+    overflow-y:auto;
+    padding:4px 16px calc(96px + env(safe-area-inset-bottom,0px));
+  }
+  .screen{ display:none; }
+  .screen.active{ display:block; animation:fadeIn .18s ease; }
+  @keyframes fadeIn{ from{ opacity:0; transform:translateY(4px);} to{ opacity:1; transform:none; } }
+
+  .section-title{ font-size:13px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.06em; margin:18px 4px 10px; }
+  .section-title:first-child{ margin-top:6px; }
+
+  /* ---------- Tabbar ---------- */
+  .tabbar{
+    position:fixed; left:0; right:0; bottom:0;
+    display:flex;
+    background:var(--surface);
+    border-top:1px solid var(--line);
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));
+    gap:4px;
+  }
+  .tab-btn{
+    flex:1;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:8px 4px 6px;
+    border-radius:var(--radius-sm);
+    color:var(--ink-soft);
+    font-size:11px; font-weight:700;
+    transition:background .15s, color .15s;
+  }
+  .tab-btn svg{ width:22px; height:22px; }
+  .tab-btn.active{ color:var(--primary); background:var(--primary-soft); }
+  .tab-btn[data-tab="mood"].active{ color:#9A742F; background:var(--mood-soft); }
+  .tab-btn[data-tab="tasks"].active{ color:var(--tasks); background:var(--tasks-soft); }
+
+  /* ---------- Cards / shared ---------- */
+  .card{
+    background:var(--surface);
+    border-radius:var(--radius);
+    padding:14px 16px;
+    box-shadow:0 2px 10px rgba(38,49,43,.06);
+  }
+  .empty-hint{
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:14px;
+    font-weight:600;
+    padding:28px 12px;
+  }
+
+  /* ---------- Habits ---------- */
+  .habit-row{
+    display:flex; align-items:center; gap:12px;
+    padding:12px 4px;
+    border-bottom:1px solid var(--line);
+  }
+  .habit-row:last-child{ border-bottom:none; }
+  .habit-emoji{ font-size:24px; flex:none; width:32px; text-align:center; }
+  .habit-info{ flex:1; min-width:0; }
+  .habit-name{ font-weight:700; font-size:15px; }
+  .habit-streak{ margin-top:2px; font-size:12px; color:var(--ink-soft); font-weight:600; }
+  .habit-streak.on{ color:var(--primary); }
+  .dot-strip{ display:flex; gap:5px; flex:none; }
+  .dot{
+    width:24px; height:24px; border-radius:8px;
+    background:var(--surface-2);
+    border:none;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; color:var(--ink-soft);
+    transition:transform .12s;
+  }
+  .dot.today{ outline:2px solid var(--primary); outline-offset:1px; }
+  .dot.done{ background:var(--primary); color:#fff; }
+  .dot.future{ opacity:.35; pointer-events:none; }
+  .dot:active{ transform:scale(.88); }
+  .habit-menu-btn{ flex:none; padding:6px; color:var(--ink-soft); font-size:16px; }
+
+  .add-row{
+    margin-top:12px;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:12px;
+    border-radius:var(--radius);
+    border:1.5px dashed var(--line);
+    color:var(--primary);
+    font-weight:700; font-size:14px;
+    width:100%;
+  }
+  .add-form{
+    margin-top:12px;
+    background:var(--surface);
+    border-radius:var(--radius);
+    padding:14px;
+    display:none;
+  }
+  .add-form.open{ display:block; }
+  .add-form input[type="text"]{
+    width:100%; padding:10px 12px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:15px; outline:none;
+  }
+  .add-form input[type="text"]:focus{ border-color:var(--primary); }
+  .emoji-pick{ display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+  .emoji-opt{
+    width:36px; height:36px; border-radius:var(--radius-sm);
+    background:var(--surface-2); font-size:18px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .emoji-opt.sel{ background:var(--primary-soft); outline:2px solid var(--primary); }
+  .form-actions{ display:flex; gap:8px; margin-top:4px; }
+  .btn{
+    padding:10px 16px; border-radius:var(--radius-sm);
+    font-weight:700; font-size:14px;
+  }
+  .btn-primary{ background:var(--primary); color:#fff; flex:1; }
+  .btn-ghost{ background:var(--surface-2); color:var(--ink-soft); }
+
+  /* ---------- Mood ---------- */
+  .mood-picker{ display:flex; justify-content:space-between; gap:6px; }
+  .mood-opt{
+    flex:1; aspect-ratio:1; border-radius:var(--radius-sm);
+    font-size:24px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--surface-2);
+    transition:transform .15s, background .15s;
+  }
+  .mood-opt.sel{ background:var(--mood-soft); transform:scale(1.1); }
+  .mood-note{ margin-top:14px; }
+  .mood-note textarea{
+    width:100%; min-height:64px; padding:10px 12px;
+    border-radius:var(--radius-sm); border:1.5px solid var(--line);
+    resize:none; font-size:14px; outline:none;
+  }
+  .mood-note textarea:focus{ border-color:var(--mood); }
+  .mood-note .counter{ text-align:right; font-size:11px; color:var(--ink-soft); margin-top:4px; }
+
+  .mood-chart{ display:flex; align-items:flex-end; gap:4px; height:96px; padding-top:8px; }
+  .mood-bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
+  .mood-bar{ width:100%; border-radius:5px 5px 2px 2px; background:var(--surface-2); min-height:6px; }
+  .mood-bar.has{ background:var(--mood); }
+  .mood-bar-label{ font-size:9px; color:var(--ink-soft); font-weight:600; }
+
+  /* ---------- Tasks ---------- */
+  .task-input-row{ display:flex; gap:8px; }
+  .task-input-row input[type="text"]{
+    flex:1; padding:12px 14px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:15px; outline:none;
+  }
+  .task-input-row input[type="text"]:focus{ border-color:var(--tasks); }
+  .task-date-toggle{
+    flex:none; width:44px; border-radius:var(--radius-sm);
+    background:var(--surface-2); color:var(--ink-soft); font-size:16px;
+  }
+  .task-date-toggle.on{ background:var(--tasks-soft); color:var(--tasks); }
+  .task-add-btn{ flex:none; width:44px; border-radius:var(--radius-sm); background:var(--tasks); color:#fff; font-size:20px; font-weight:700; }
+  .task-date-row{ display:none; margin-top:8px; }
+  .task-date-row.open{ display:block; }
+  .task-date-row input{ padding:8px 10px; border-radius:var(--radius-sm); border:1.5px solid var(--line); font-size:13px; }
+
+  .task-item{
+    display:flex; align-items:center; gap:10px;
+    padding:12px 4px; border-bottom:1px solid var(--line);
+  }
+  .task-item:last-child{ border-bottom:none; }
+  .task-check{
+    width:22px; height:22px; border-radius:7px; flex:none;
+    border:2px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .task-check.checked{ background:var(--tasks); border-color:var(--tasks); color:#fff; font-size:13px; }
+  .task-text{ flex:1; min-width:0; font-size:14px; font-weight:600; word-break:break-word; }
+  .task-text.done{ text-decoration:line-through; color:var(--ink-soft); }
+  .task-due{ font-size:11px; font-weight:700; color:var(--ink-soft); flex:none; }
+  .task-due.overdue{ color:var(--danger); }
+  .task-remove{ flex:none; color:var(--ink-soft); font-size:16px; padding:4px; }
+
+  .done-toggle{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 4px; font-size:13px; font-weight:700; color:var(--ink-soft);
+  }
+  .done-toggle .clear-btn{ color:var(--danger); font-weight:700; font-size:12px; }
+  .done-list{ display:none; }
+  .done-list.open{ display:block; }
+
+  /* ---------- Toast ---------- */
+  #toast{
+    position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom,0px));
+    transform:translateX(-50%) translateY(12px);
+    background:var(--ink); color:#fff;
+    padding:10px 18px; border-radius:999px;
+    font-size:13px; font-weight:600;
+    opacity:0; pointer-events:none;
+    transition:opacity .2s, transform .2s;
+    z-index:50;
+    max-width:88vw; text-align:center;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="app-shell">
+  <header class="app-header">
+    <div class="greeting">Привет 👋</div>
+    <div class="date mono" id="today-label"></div>
+  </header>
+
+  <main class="app-main">
+
+    <section id="screen-habits" class="screen">
+      <div class="section-title">Привычки</div>
+      <div class="card" id="habits-list"></div>
+      <button class="add-row" id="habit-add-toggle">+ Добавить привычку</button>
+      <div class="add-form" id="habit-add-form">
+        <input type="text" id="habit-name-input" placeholder="Название привычки" maxlength="40">
+        <div class="emoji-pick" id="habit-emoji-pick"></div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" id="habit-cancel-btn">Отмена</button>
+          <button class="btn btn-primary" id="habit-save-btn">Добавить</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-mood" class="screen">
+      <div class="section-title">Как настроение сегодня?</div>
+      <div class="card">
+        <div class="mood-picker" id="mood-picker"></div>
+        <div class="mood-note">
+          <textarea id="mood-note-input" maxlength="100" placeholder="Пара слов о дне (необязательно)"></textarea>
+          <div class="counter"><span id="mood-note-count">0</span>/100</div>
+        </div>
+      </div>
+      <div class="section-title">Последние 14 дней</div>
+      <div class="card">
+        <div class="mood-chart" id="mood-chart"></div>
+      </div>
+    </section>
+
+    <section id="screen-tasks" class="screen">
+      <div class="section-title">Задачи</div>
+      <div class="card">
+        <div class="task-input-row">
+          <input type="text" id="task-text-input" placeholder="Новая задача" maxlength="140">
+          <button class="task-date-toggle" id="task-date-toggle">📅</button>
+          <button class="task-add-btn" id="task-add-btn">+</button>
+        </div>
+        <div class="task-date-row" id="task-date-row">
+          <input type="date" id="task-date-input">
+        </div>
+      </div>
+      <div class="card" id="tasks-active-list" style="margin-top:12px;"></div>
+      <div class="done-toggle" id="done-toggle">
+        <span id="done-toggle-label">Выполнено (0)</span>
+        <span class="clear-btn" id="clear-done-btn">Очистить</span>
+      </div>
+      <div class="card done-list" id="tasks-done-list"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="habits">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="17" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M8 2v4M16 2v4M7 12l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Привычки
+    </button>
+    <button class="tab-btn" data-tab="mood">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Настроение
+    </button>
+    <button class="tab-btn" data-tab="tasks">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Задачи
+    </button>
+  </nav>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ============ Utils ============
+  const Utils = (() => {
+    function pad(n){ return String(n).padStart(2,'0'); }
+    function fmtDate(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+    function todayDate(){ const d = new Date(); d.setHours(0,0,0,0); return d; }
+    function todayStr(){ return fmtDate(todayDate()); }
+    function monthKey(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}`; }
+    function dayKey(d){ return pad(d.getDate()); }
+    function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+    function parseYMD(str){ const [y,m,day] = str.split('-').map(Number); const d = new Date(y, m-1, day); return d; }
+    const MONTHS = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+    const WEEKDAYS = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+    function fmtShort(d){ return `${d.getDate()} ${MONTHS[d.getMonth()]}`; }
+    function fmtLong(d){
+      const WD = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+      return `${WD[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+    }
+    function weekdayShort(d){ return WEEKDAYS[d.getDay()]; }
+    return { pad, fmtDate, todayDate, todayStr, monthKey, dayKey, addDays, parseYMD, fmtShort, fmtLong, weekdayShort };
+  })();
+
+  // ============ Telegram SDK wrapper ============
+  const TG = (() => {
+    const tg = window.Telegram && window.Telegram.WebApp;
+
+    function init(){
+      if (!tg) return;
+      try {
+        tg.ready();
+        tg.expand();
+        if (typeof tg.disableVerticalSwipes === 'function') tg.disableVerticalSwipes();
+        if (tg.BackButton && typeof tg.BackButton.hide === 'function') tg.BackButton.hide();
+        applyChrome();
+        tg.onEvent && tg.onEvent('themeChanged', applyChrome);
+      } catch(e) { /* older client versions — degrade silently */ }
+    }
+
+    function applyChrome(){
+      if (!tg) return;
+      try {
+        if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor('#EFF2EC');
+        if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor('#EFF2EC');
+      } catch(e) {}
+    }
+
+    function haptic(style){
+      try { tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred(style || 'light'); } catch(e) {}
+    }
+    function notify(type){
+      try { tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred(type || 'success'); } catch(e) {}
+    }
+    function alertMsg(msg){
+      if (tg && typeof tg.showAlert === 'function') tg.showAlert(msg);
+      else window.alert(msg);
+    }
+    function confirmMsg(msg, cb){
+      if (tg && typeof tg.showConfirm === 'function') tg.showConfirm(msg, cb);
+      else cb(window.confirm(msg));
+    }
+
+    return { raw: tg, init, haptic, notify, alertMsg, confirmMsg };
+  })();
+
+  // ============ Storage layer ============
+  const Storage = (() => {
+    const cloud = TG.raw && TG.raw.CloudStorage && typeof TG.raw.CloudStorage.getItem === 'function' ? TG.raw.CloudStorage : null;
+    const pendingSync = new Map();
+
+    function getItem(key){
+      return new Promise(resolve => {
+        if (!cloud) { resolve(localStorage.getItem(key)); return; }
+        try {
+          cloud.getItem(key, (err, value) => {
+            if (err) { resolve(localStorage.getItem(key)); return; }
+            resolve(value || null);
+          });
+        } catch(e) { resolve(localStorage.getItem(key)); }
+      });
+    }
+
+    function getItems(keys){
+      return new Promise(resolve => {
+        if (!cloud || keys.length === 0) {
+          const out = {};
+          keys.forEach(k => out[k] = localStorage.getItem(k));
+          resolve(out);
+          return;
+        }
+        try {
+          cloud.getItems(keys, (err, values) => resolve(err ? {} : (values || {})));
+        } catch(e) { resolve({}); }
+      });
+    }
+
+    function scheduleCloudSync(key, valueStr){
+      if (!cloud) return;
+      clearTimeout(pendingSync.get(key));
+      pendingSync.set(key, setTimeout(() => {
+        try {
+          cloud.setItem(key, valueStr, (err, ok) => {
+            if (err || !ok) Toast.show('Не удалось синхронизировать — сохранено локально');
+          });
+        } catch(e) { Toast.show('Не удалось синхронизировать — сохранено локально'); }
+      }, 600));
+    }
+
+    function setJSON(key, obj){
+      const str = JSON.stringify(obj);
+      try { localStorage.setItem(key, str); } catch(e) {}
+      scheduleCloudSync(key, str);
+    }
+
+    async function getJSON(key, fallback){
+      const str = await getItem(key);
+      if (!str) return fallback;
+      try { return JSON.parse(str); } catch(e) { return fallback; }
+    }
+
+    async function getJSONMulti(keys, fallback){
+      const map = await getItems(keys);
+      const out = {};
+      for (const k of keys) {
+        try { out[k] = map[k] ? JSON.parse(map[k]) : (fallback ? fallback() : null); }
+        catch(e) { out[k] = fallback ? fallback() : null; }
+      }
+      return out;
+    }
+
+    return { isCloudAvailable: () => !!cloud, getJSON, getJSONMulti, setJSON };
+  })();
+
+  // ============ Toast ============
+  const Toast = (() => {
+    let hideTimer = null;
+    function show(msg, ms){
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => el.classList.remove('show'), ms || 2200);
+    }
+    return { show };
+  })();
+
+  // ============ Meta ============
+  const Meta = (() => {
+    let data = { schemaVersion:1, nextHabitId:1, nextTaskId:1, activeTab:'habits' };
+    async function init(){
+      data = await Storage.getJSON('trk_meta', data);
+      if (!data.schemaVersion) data.schemaVersion = 1;
+    }
+    function save(){ Storage.setJSON('trk_meta', data); }
+    function nextHabitId(){ const id = 'h' + data.nextHabitId; data.nextHabitId++; save(); return id; }
+    function nextTaskId(){ const id = 't' + data.nextTaskId; data.nextTaskId++; save(); return id; }
+    function get(){ return data; }
+    function setActiveTab(tab){ data.activeTab = tab; save(); }
+    return { init, nextHabitId, nextTaskId, get, setActiveTab };
+  })();
+
+  // ============ Habits ============
+  const Habits = (() => {
+    const HABIT_EMOJIS = ['🧘','📖','💧','🏃','🥗','😴','✍️','🎯','🧹','🚭','💊','🌱'];
+    let list = [];
+    let monthCache = {}; // 'YYYY-MM' -> { '01': ['h1','h2'], ... }
+    let pickedEmoji = HABIT_EMOJIS[0];
+
+    function monthsToLoad(){
+      const today = Utils.todayDate();
+      const prev = Utils.addDays(today, -31);
+      return Array.from(new Set([Utils.monthKey(today), Utils.monthKey(prev)]));
+    }
+
+    async function init(){
+      list = await Storage.getJSON('trk_habits_list', []);
+      const keys = monthsToLoad().map(m => 'trk_habits_' + m);
+      const loaded = await Storage.getJSONMulti(keys, () => ({}));
+      monthCache = {};
+      monthsToLoad().forEach(m => { monthCache[m] = loaded['trk_habits_' + m] || {}; });
+      render();
+    }
+
+    function ensureMonth(m){
+      if (!monthCache[m]) monthCache[m] = {};
+      return monthCache[m];
+    }
+
+    function isDone(habitId, date){
+      const m = Utils.monthKey(date), d = Utils.dayKey(date);
+      const month = monthCache[m];
+      if (!month || !month[d]) return false;
+      return month[d].indexOf(habitId) !== -1;
+    }
+
+    function saveMonth(m){
+      Storage.setJSON('trk_habits_' + m, monthCache[m]);
+    }
+
+    function toggleDay(habitId, date){
+      if (date > Utils.todayDate()) return;
+      const m = Utils.monthKey(date), d = Utils.dayKey(date);
+      const month = ensureMonth(m);
+      if (!month[d]) month[d] = [];
+      const idx = month[d].indexOf(habitId);
+      if (idx === -1) { month[d].push(habitId); TG.haptic('light'); }
+      else { month[d].splice(idx, 1); TG.haptic('light'); }
+      if (month[d].length === 0) delete month[d];
+      saveMonth(m);
+      render();
+    }
+
+    function computeStreak(habitId){
+      let streak = 0;
+      let cursor = Utils.todayDate();
+      for (let i = 0; i < 62; i++) {
+        const m = Utils.monthKey(cursor);
+        if (!monthCache[m]) break; // outside loaded window
+        if (isDone(habitId, cursor)) { streak++; cursor = Utils.addDays(cursor, -1); }
+        else break;
+      }
+      return streak;
+    }
+
+    function addHabit(name, emoji){
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      list.push({ id: Meta.nextHabitId(), name: trimmed, emoji: emoji, createdAt: Utils.todayStr(), archived: false });
+      Storage.setJSON('trk_habits_list', list);
+      render();
+    }
+
+    function archiveHabit(habitId){
+      const h = list.find(x => x.id === habitId);
+      if (!h) return;
+      h.archived = true;
+      Storage.setJSON('trk_habits_list', list);
+      render();
+    }
+
+    function renderEmojiPicker(){
+      const wrap = document.getElementById('habit-emoji-pick');
+      wrap.innerHTML = HABIT_EMOJIS.map(e =>
+        `<button type="button" class="emoji-opt${e===pickedEmoji?' sel':''}" data-emoji="${e}">${e}</button>`
+      ).join('');
+      wrap.querySelectorAll('.emoji-opt').forEach(btn => {
+        btn.addEventListener('click', () => { pickedEmoji = btn.dataset.emoji; renderEmojiPicker(); });
+      });
+    }
+
+    function render(){
+      const container = document.getElementById('habits-list');
+      const visible = list.filter(h => !h.archived);
+      if (visible.length === 0) {
+        container.innerHTML = '<div class="empty-hint">Пока нет привычек — добавь первую ниже</div>';
+        return;
+      }
+      const today = Utils.todayDate();
+      const days = [];
+      for (let i = 6; i >= 0; i--) days.push(Utils.addDays(today, -i));
+
+      container.innerHTML = visible.map(h => {
+        const streak = computeStreak(h.id);
+        const dots = days.map(d => {
+          const done = isDone(h.id, d);
+          const isToday = Utils.fmtDate(d) === Utils.fmtDate(today);
+          const cls = ['dot'];
+          if (done) cls.push('done');
+          if (isToday) cls.push('today');
+          return `<button type="button" class="${cls.join(' ')}" data-habit="${h.id}" data-date="${Utils.fmtDate(d)}">${Utils.weekdayShort(d)[0]}</button>`;
+        }).join('');
+        return `
+          <div class="habit-row">
+            <div class="habit-emoji">${h.emoji}</div>
+            <div class="habit-info">
+              <div class="habit-name">${escapeHtml(h.name)}</div>
+              <div class="habit-streak${streak>0?' on':''}">${streak>0 ? '🔥 ' + streak + (streak===1?' день':streak<5?' дня':' дней') : 'нет серии'}</div>
+            </div>
+            <div class="dot-strip">${dots}</div>
+            <button type="button" class="habit-menu-btn" data-archive="${h.id}">⋯</button>
+          </div>`;
+      }).join('');
+
+      container.querySelectorAll('.dot').forEach(dot => {
+        dot.addEventListener('click', () => {
+          toggleDay(dot.dataset.habit, Utils.parseYMD(dot.dataset.date));
+        });
+      });
+      container.querySelectorAll('[data-archive]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          TG.confirmMsg('Архивировать привычку? История сохранится.', (ok) => {
+            if (ok) archiveHabit(btn.dataset.archive);
+          });
+        });
+      });
+    }
+
+    function wireForm(){
+      const toggle = document.getElementById('habit-add-toggle');
+      const form = document.getElementById('habit-add-form');
+      const nameInput = document.getElementById('habit-name-input');
+      toggle.addEventListener('click', () => {
+        form.classList.add('open');
+        toggle.style.display = 'none';
+        pickedEmoji = HABIT_EMOJIS[0];
+        renderEmojiPicker();
+        nameInput.value = '';
+        nameInput.focus();
+      });
+      document.getElementById('habit-cancel-btn').addEventListener('click', () => {
+        form.classList.remove('open');
+        toggle.style.display = '';
+      });
+      document.getElementById('habit-save-btn').addEventListener('click', () => {
+        if (!nameInput.value.trim()) { TG.alertMsg('Введи название привычки'); return; }
+        addHabit(nameInput.value, pickedEmoji);
+        form.classList.remove('open');
+        toggle.style.display = '';
+        Toast.show('Привычка добавлена');
+      });
+    }
+
+    return { init, wireForm };
+  })();
+
+  // ============ Mood ============
+  const Mood = (() => {
+    const SCALE = [
+      { v:1, emoji:'😞' }, { v:2, emoji:'🙁' }, { v:3, emoji:'😐' }, { v:4, emoji:'🙂' }, { v:5, emoji:'😄' }
+    ];
+    let monthCache = {};
+
+    function monthsToLoad(){
+      const today = Utils.todayDate();
+      const prev = Utils.addDays(today, -14);
+      return Array.from(new Set([Utils.monthKey(today), Utils.monthKey(prev)]));
+    }
+
+    async function init(){
+      const keys = monthsToLoad().map(m => 'trk_mood_' + m);
+      const loaded = await Storage.getJSONMulti(keys, () => ({}));
+      monthCache = {};
+      monthsToLoad().forEach(m => { monthCache[m] = loaded['trk_mood_' + m] || {}; });
+      render();
+    }
+
+    function entryFor(date){
+      const m = Utils.monthKey(date), d = Utils.dayKey(date);
+      return (monthCache[m] && monthCache[m][d]) || null;
+    }
+
+    function saveMonth(m){ Storage.setJSON('trk_mood_' + m, monthCache[m]); }
+
+    function setToday(value, note){
+      const today = Utils.todayDate();
+      const m = Utils.monthKey(today), d = Utils.dayKey(today);
+      if (!monthCache[m]) monthCache[m] = {};
+      const entry = { v: value };
+      if (note && note.trim()) entry.n = note.trim().slice(0,100);
+      monthCache[m][d] = entry;
+      saveMonth(m);
+    }
+
+    function render(){
+      const today = Utils.todayDate();
+      const todayEntry = entryFor(today);
+
+      const picker = document.getElementById('mood-picker');
+      picker.innerHTML = SCALE.map(s =>
+        `<button type="button" class="mood-opt${todayEntry && todayEntry.v===s.v ? ' sel':''}" data-v="${s.v}">${s.emoji}</button>`
+      ).join('');
+      picker.querySelectorAll('.mood-opt').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const v = Number(btn.dataset.v);
+          const note = document.getElementById('mood-note-input').value;
+          setToday(v, note);
+          TG.haptic('medium');
+          render();
+          Toast.show('Настроение сохранено');
+        });
+      });
+
+      const noteInput = document.getElementById('mood-note-input');
+      if (document.activeElement !== noteInput) noteInput.value = (todayEntry && todayEntry.n) || '';
+      document.getElementById('mood-note-count').textContent = String(noteInput.value.length);
+
+      const chart = document.getElementById('mood-chart');
+      const days = [];
+      for (let i = 13; i >= 0; i--) days.push(Utils.addDays(today, -i));
+      chart.innerHTML = days.map(d => {
+        const entry = entryFor(d);
+        const h = entry ? (entry.v/5*100) : 6;
+        return `<div class="mood-bar-col" data-date="${Utils.fmtDate(d)}" title="${Utils.fmtShort(d)}">
+          <div class="mood-bar${entry?' has':''}" style="height:${h}%"></div>
+          <div class="mood-bar-label">${d.getDate()}</div>
+        </div>`;
+      }).join('');
+      chart.querySelectorAll('.mood-bar-col').forEach(col => {
+        col.addEventListener('click', () => {
+          const d = Utils.parseYMD(col.dataset.date);
+          const entry = entryFor(d);
+          if (!entry) { Toast.show(Utils.fmtLong(d) + ' — нет записи'); return; }
+          const label = SCALE.find(s => s.v === entry.v);
+          Toast.show(`${Utils.fmtLong(d)}: ${label ? label.emoji : ''}${entry.n ? ' — ' + entry.n : ''}`, 3200);
+        });
+      });
+    }
+
+    function wireForm(){
+      const noteInput = document.getElementById('mood-note-input');
+      let saveTimer = null;
+      noteInput.addEventListener('input', () => {
+        document.getElementById('mood-note-count').textContent = String(noteInput.value.length);
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          const today = Utils.todayDate();
+          const existing = entryFor(today);
+          setToday(existing ? existing.v : 3, noteInput.value);
+        }, 500);
+      });
+    }
+
+    return { init, wireForm };
+  })();
+
+  // ============ Tasks ============
+  const Tasks = (() => {
+    let active = [];
+    let doneCache = {}; // 'YYYY-MM' -> [...]
+    let doneOpen = false;
+    let dateRowOpen = false;
+
+    function currentDoneKey(){ return 'trk_tasks_done_' + Utils.monthKey(Utils.todayDate()); }
+
+    async function init(){
+      active = await Storage.getJSON('trk_tasks_active', []);
+      doneCache[currentDoneKey()] = await Storage.getJSON(currentDoneKey(), []);
+      render();
+    }
+
+    function saveActive(){ Storage.setJSON('trk_tasks_active', active); }
+    function saveDone(){ Storage.setJSON(currentDoneKey(), doneCache[currentDoneKey()]); }
+
+    function add(text, due){
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const approxBytes = JSON.stringify(active).length;
+      if (approxBytes > 3500) Toast.show('Список задач большой — удали часть выполненных или лишних пунктов');
+      active.unshift({ id: Meta.nextTaskId(), text: trimmed, due: due || null, createdAt: Utils.todayStr() });
+      saveActive();
+      render();
+    }
+
+    function toggleDone(id){
+      const idx = active.findIndex(t => t.id === id);
+      if (idx === -1) return;
+      const [task] = active.splice(idx, 1);
+      saveActive();
+      const key = currentDoneKey();
+      if (!doneCache[key]) doneCache[key] = [];
+      doneCache[key].unshift({ id: task.id, text: task.text, due: task.due, completedAt: Utils.todayStr() });
+      saveDone();
+      TG.notify('success');
+      render();
+    }
+
+    function remove(id){
+      active = active.filter(t => t.id !== id);
+      saveActive();
+      render();
+    }
+
+    function clearCompleted(){
+      const key = currentDoneKey();
+      TG.confirmMsg('Очистить выполненные задачи за этот месяц?', (ok) => {
+        if (!ok) return;
+        doneCache[key] = [];
+        saveDone();
+        render();
+        Toast.show('Выполненные задачи очищены');
+      });
+    }
+
+    function render(){
+      const activeList = document.getElementById('tasks-active-list');
+      if (active.length === 0) {
+        activeList.innerHTML = '<div class="empty-hint">Нет активных задач ✨</div>';
+      } else {
+        const today = Utils.todayStr();
+        activeList.innerHTML = active.map(t => {
+          const overdue = t.due && t.due < today;
+          const dueLabel = t.due ? Utils.fmtShort(Utils.parseYMD(t.due)) : '';
+          return `
+            <div class="task-item">
+              <button type="button" class="task-check" data-done="${t.id}"></button>
+              <div class="task-text">${escapeHtml(t.text)}</div>
+              ${t.due ? `<div class="task-due${overdue?' overdue':''}">${dueLabel}</div>` : ''}
+              <button type="button" class="task-remove" data-remove="${t.id}">✕</button>
+            </div>`;
+        }).join('');
+      }
+
+      const doneList = doneCache[currentDoneKey()] || [];
+      document.getElementById('done-toggle-label').textContent = `Выполнено (${doneList.length})`;
+      const doneContainer = document.getElementById('tasks-done-list');
+      doneContainer.classList.toggle('open', doneOpen);
+      if (doneList.length === 0) {
+        doneContainer.innerHTML = '<div class="empty-hint">Пока пусто</div>';
+      } else {
+        doneContainer.innerHTML = doneList.map(t => `
+          <div class="task-item">
+            <div class="task-check checked">✓</div>
+            <div class="task-text done">${escapeHtml(t.text)}</div>
+          </div>`).join('');
+      }
+
+      activeList.querySelectorAll('[data-done]').forEach(btn => {
+        btn.addEventListener('click', () => toggleDone(btn.dataset.done));
+      });
+      activeList.querySelectorAll('[data-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          TG.confirmMsg('Удалить задачу?', (ok) => { if (ok) remove(btn.dataset.remove); });
+        });
+      });
+    }
+
+    function wireForm(){
+      const textInput = document.getElementById('task-text-input');
+      const dateToggle = document.getElementById('task-date-toggle');
+      const dateRow = document.getElementById('task-date-row');
+      const dateInput = document.getElementById('task-date-input');
+
+      dateToggle.addEventListener('click', () => {
+        dateRowOpen = !dateRowOpen;
+        dateRow.classList.toggle('open', dateRowOpen);
+        dateToggle.classList.toggle('on', dateRowOpen);
+      });
+
+      function submit(){
+        if (!textInput.value.trim()) return;
+        add(textInput.value, dateInput.value || null);
+        textInput.value = '';
+        dateInput.value = '';
+        dateRowOpen = false;
+        dateRow.classList.remove('open');
+        dateToggle.classList.remove('on');
+      }
+      document.getElementById('task-add-btn').addEventListener('click', submit);
+      textInput.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+
+      document.getElementById('done-toggle').addEventListener('click', (e) => {
+        if (e.target.id === 'clear-done-btn') return;
+        doneOpen = !doneOpen;
+        render();
+      });
+      document.getElementById('clear-done-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearCompleted();
+      });
+    }
+
+    return { init, wireForm };
+  })();
+
+  // ============ Nav ============
+  const Nav = (() => {
+    function switchTo(tab){
+      document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + tab));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      Meta.setActiveTab(tab);
+    }
+    function wire(){
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => { TG.haptic('light'); switchTo(btn.dataset.tab); });
+      });
+    }
+    return { switchTo, wire };
+  })();
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ============ App ============
+  async function boot(){
+    TG.init();
+    document.getElementById('today-label').textContent = Utils.fmtLong(Utils.todayDate());
+
+    await Meta.init();
+    await Promise.all([Habits.init(), Mood.init(), Tasks.init()]);
+
+    Habits.wireForm();
+    Mood.wireForm();
+    Tasks.wireForm();
+    Nav.wire();
+    Nav.switchTo(Meta.get().activeTab || 'habits');
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+})();
+</script>
+</body>
+</html>
