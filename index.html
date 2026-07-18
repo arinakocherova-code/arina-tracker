@@ -11,6 +11,11 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root{
+    /* заливки с белым текстом поверх — фиксированные, не меняются между темами,
+       чтобы контраст с белым текстом оставался достаточным в любой теме */
+    --primary-fill:#4B6B57;
+    --tasks-fill:#6E7F93;
+
     --bg:#EFF2EC;
     --surface:#FFFFFF;
     --surface-2:#E3E8DE;
@@ -21,6 +26,7 @@
     --primary:#4B6B57;
     --primary-soft:#DCE6DA;
     --mood:#D6A24C;
+    --mood-text:#9A742F;
     --mood-soft:#F3E6C8;
     --tasks:#6E7F93;
     --tasks-soft:#E1E6EC;
@@ -30,12 +36,33 @@
     --radius:16px;
     --radius-sm:10px;
   }
+
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#171D19; --surface:#212821; --surface-2:#2A332B;
+      --ink:#E7ECE7; --ink-soft:#92A092; --line:#384039;
+      --primary:#7CAE8D; --primary-soft:rgba(124,174,141,.18);
+      --mood:#E0B267; --mood-text:#F0C77B; --mood-soft:rgba(224,178,103,.16);
+      --tasks:#93A6BB; --tasks-soft:rgba(147,166,187,.16);
+      --danger:#E29184; --danger-soft:rgba(226,145,132,.16);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#171D19; --surface:#212821; --surface-2:#2A332B;
+    --ink:#E7ECE7; --ink-soft:#92A092; --line:#384039;
+    --primary:#7CAE8D; --primary-soft:rgba(124,174,141,.18);
+    --mood:#E0B267; --mood-text:#F0C77B; --mood-soft:rgba(224,178,103,.16);
+    --tasks:#93A6BB; --tasks-soft:rgba(147,166,187,.16);
+    --danger:#E29184; --danger-soft:rgba(226,145,132,.16);
+  }
+
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink); }
   body{
     font-family:'Manrope','Segoe UI',sans-serif;
     -webkit-font-smoothing:antialiased;
     overscroll-behavior:none;
+    transition:background-color .15s ease, color .15s ease;
   }
   .mono{ font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
   button{ font-family:inherit; border:none; background:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
@@ -86,7 +113,7 @@
   }
   .tab-btn svg{ width:22px; height:22px; }
   .tab-btn.active{ color:var(--primary); background:var(--primary-soft); }
-  .tab-btn[data-tab="mood"].active{ color:#9A742F; background:var(--mood-soft); }
+  .tab-btn[data-tab="mood"].active{ color:var(--mood-text); background:var(--mood-soft); }
   .tab-btn[data-tab="tasks"].active{ color:var(--tasks); background:var(--tasks-soft); }
 
   /* ---------- Cards / shared ---------- */
@@ -126,7 +153,7 @@
     transition:transform .12s;
   }
   .dot.today{ outline:2px solid var(--primary); outline-offset:1px; }
-  .dot.done{ background:var(--primary); color:#fff; }
+  .dot.done{ background:var(--primary-fill); color:#fff; }
   .dot.future{ opacity:.35; pointer-events:none; }
   .dot:active{ transform:scale(.88); }
   .habit-menu-btn{ flex:none; padding:6px; color:var(--ink-soft); font-size:16px; }
@@ -152,6 +179,7 @@
   .add-form input[type="text"]{
     width:100%; padding:10px 12px; border-radius:var(--radius-sm);
     border:1.5px solid var(--line); font-size:15px; outline:none;
+    background:var(--surface); color:var(--ink);
   }
   .add-form input[type="text"]:focus{ border-color:var(--primary); }
   .emoji-pick{ display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
@@ -166,7 +194,7 @@
     padding:10px 16px; border-radius:var(--radius-sm);
     font-weight:700; font-size:14px;
   }
-  .btn-primary{ background:var(--primary); color:#fff; flex:1; }
+  .btn-primary{ background:var(--primary-fill); color:#fff; flex:1; }
   .btn-ghost{ background:var(--surface-2); color:var(--ink-soft); }
 
   /* ---------- Mood ---------- */
@@ -184,6 +212,7 @@
     width:100%; min-height:64px; padding:10px 12px;
     border-radius:var(--radius-sm); border:1.5px solid var(--line);
     resize:none; font-size:14px; outline:none;
+    background:var(--surface); color:var(--ink);
   }
   .mood-note textarea:focus{ border-color:var(--mood); }
   .mood-note .counter{ text-align:right; font-size:11px; color:var(--ink-soft); margin-top:4px; }
@@ -199,6 +228,7 @@
   .task-input-row input[type="text"]{
     flex:1; padding:12px 14px; border-radius:var(--radius-sm);
     border:1.5px solid var(--line); font-size:15px; outline:none;
+    background:var(--surface); color:var(--ink);
   }
   .task-input-row input[type="text"]:focus{ border-color:var(--tasks); }
   .task-date-toggle{
@@ -206,10 +236,10 @@
     background:var(--surface-2); color:var(--ink-soft); font-size:16px;
   }
   .task-date-toggle.on{ background:var(--tasks-soft); color:var(--tasks); }
-  .task-add-btn{ flex:none; width:44px; border-radius:var(--radius-sm); background:var(--tasks); color:#fff; font-size:20px; font-weight:700; }
+  .task-add-btn{ flex:none; width:44px; border-radius:var(--radius-sm); background:var(--tasks-fill); color:#fff; font-size:20px; font-weight:700; }
   .task-date-row{ display:none; margin-top:8px; }
   .task-date-row.open{ display:block; }
-  .task-date-row input{ padding:8px 10px; border-radius:var(--radius-sm); border:1.5px solid var(--line); font-size:13px; }
+  .task-date-row input{ padding:8px 10px; border-radius:var(--radius-sm); border:1.5px solid var(--line); font-size:13px; background:var(--surface); color:var(--ink); }
 
   .task-item{
     display:flex; align-items:center; gap:10px;
@@ -221,7 +251,7 @@
     border:2px solid var(--line);
     display:flex; align-items:center; justify-content:center;
   }
-  .task-check.checked{ background:var(--tasks); border-color:var(--tasks); color:#fff; font-size:13px; }
+  .task-check.checked{ background:var(--tasks-fill); border-color:var(--tasks-fill); color:#fff; font-size:13px; }
   .task-main{ flex:1; min-width:0; }
   .task-text{ font-size:14px; font-weight:600; word-break:break-word; }
   .task-text.done{ text-decoration:line-through; color:var(--ink-soft); }
@@ -266,7 +296,7 @@
   #lock-request-btn{
     margin-top:18px;
     padding:12px 22px; border-radius:999px;
-    background:var(--primary); color:#fff;
+    background:var(--primary-fill); color:#fff;
     font-weight:700; font-size:14px;
   }
   #lock-request-panel{ display:none; margin-top:20px; width:100%; max-width:300px; }
@@ -283,10 +313,49 @@
   }
   #lock-tg-link{
     display:block; margin-top:10px; width:100%; padding:12px; border-radius:var(--radius-sm);
-    background:var(--primary); color:#fff; font-weight:700; font-size:14px;
+    background:var(--primary-fill); color:#fff; font-weight:700; font-size:14px;
     text-decoration:none; box-sizing:border-box;
   }
   #lock-request-panel .lock-hint{ margin-top:10px; font-size:12px; color:var(--ink-soft); font-weight:600; line-height:1.5; }
+
+  /* ---------- Шапка: тема + обратная связь ---------- */
+  .app-header-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .header-actions{ display:flex; gap:8px; flex:none; }
+  .icon-btn{
+    width:38px; height:38px; border-radius:12px; flex:none;
+    background:var(--surface); color:var(--ink);
+    font-size:16px; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 8px rgba(0,0,0,.06);
+  }
+
+  /* ---------- Панель обратной связи ---------- */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.4);
+    z-index:60; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-card{
+    background:var(--surface); border-radius:var(--radius);
+    padding:18px; width:100%; max-width:340px;
+  }
+  .modal-title{ font-size:16px; font-weight:800; margin-bottom:10px; }
+  #feedback-text{
+    width:100%; min-height:90px; padding:10px 12px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:14px; outline:none; resize:none;
+    font-family:inherit; background:var(--surface); color:var(--ink);
+  }
+  #feedback-text:focus{ border-color:var(--primary); }
+  .modal-actions{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .modal-actions .btn-primary{ text-align:center; text-decoration:none; }
+  .modal-close{ display:block; width:100%; text-align:center; margin-top:10px; color:var(--ink-soft); font-weight:700; font-size:13px; padding:6px; }
+
+  /* ---------- Редактирование задачи ---------- */
+  .task-edit-input{
+    width:100%; padding:6px 8px; border-radius:8px;
+    border:1.5px solid var(--primary); font-size:14px; font-weight:600;
+    outline:none; font-family:inherit; background:var(--surface); color:var(--ink);
+  }
+  .task-save{ flex:none; color:var(--primary-fill); font-size:18px; font-weight:800; padding:4px 8px; }
 </style>
 </head>
 <body>
@@ -309,9 +378,29 @@
 
 <div id="app-shell">
   <header class="app-header">
-    <div class="greeting">Привет 👋</div>
-    <div class="date mono" id="today-label"></div>
+    <div class="app-header-row">
+      <div>
+        <div class="greeting">Привет 👋</div>
+        <div class="date mono" id="today-label"></div>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="theme-toggle-btn" class="icon-btn" aria-label="Переключить тему">🌙</button>
+        <button type="button" id="feedback-btn" class="icon-btn" aria-label="Оставить отзыв">💬</button>
+      </div>
+    </div>
   </header>
+
+  <div class="modal-overlay" id="feedback-panel">
+    <div class="modal-card">
+      <div class="modal-title">Что улучшить?</div>
+      <textarea id="feedback-text" maxlength="500" placeholder="Напиши, чего не хватает или что поправить"></textarea>
+      <div class="modal-actions">
+        <button type="button" id="feedback-copy-btn" class="btn btn-ghost">Скопировать текст</button>
+        <a href="https://t.me/Arina_Kocherova" target="_blank" rel="noopener" class="btn btn-primary">Написать Арине →</a>
+      </div>
+      <button type="button" class="modal-close" id="feedback-close-btn">Закрыть</button>
+    </div>
+  </div>
 
   <main class="app-main">
 
@@ -556,6 +645,39 @@
     }
 
     return { isCloudAvailable: () => !!cloud, getJSON, getJSONMulti, setJSON };
+  })();
+
+  // ============ Theme (светлая/тёмная, выбор пользователя хранится локально) ============
+  const Theme = (() => {
+    const KEY = 'trk_theme'; // 'light' | 'dark' | не задано — тогда системная тема
+
+    function current(){
+      try { return localStorage.getItem(KEY); } catch(e) { return null; }
+    }
+    function isDarkActive(){
+      const pref = current();
+      if (pref) return pref === 'dark';
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    function updateIcon(){
+      const btn = document.getElementById('theme-toggle-btn');
+      if (btn) btn.textContent = isDarkActive() ? '☀️' : '🌙';
+    }
+    function apply(pref){
+      if (pref === 'dark' || pref === 'light') document.documentElement.setAttribute('data-theme', pref);
+      else document.documentElement.removeAttribute('data-theme');
+      updateIcon();
+    }
+    function toggle(){
+      const next = isDarkActive() ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, next); } catch(e) {}
+      apply(next);
+      TG.haptic('light');
+    }
+    function init(){
+      apply(current());
+    }
+    return { init, toggle };
   })();
 
   // ============ Toast ============
@@ -856,6 +978,7 @@
     let doneCache = {}; // 'YYYY-MM' -> [...]
     let doneOpen = false;
     let dateRowOpen = false;
+    let editingId = null;
 
     function currentDoneKey(){ return 'trk_tasks_done_' + Utils.monthKey(Utils.todayDate()); }
 
@@ -911,6 +1034,31 @@
       render();
     }
 
+    function startEdit(id){
+      editingId = id;
+      render();
+      requestAnimationFrame(() => {
+        const input = document.querySelector('.task-edit-input');
+        if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+      });
+    }
+
+    function saveEdit(id, newText){
+      const idx = active.findIndex(t => t.id === id);
+      if (idx !== -1) {
+        const trimmed = newText.trim();
+        if (trimmed) active[idx].text = trimmed;
+        saveActive();
+      }
+      editingId = null;
+      render();
+    }
+
+    function cancelEdit(){
+      editingId = null;
+      render();
+    }
+
     function clearCompleted(){
       const key = currentDoneKey();
       TG.confirmMsg('Очистить выполненные задачи за этот месяц?', (ok) => {
@@ -932,10 +1080,22 @@
           const overdue = t.due && t.due < today;
           const dueLabel = t.due ? Utils.fmtShort(Utils.parseYMD(t.due)) : '';
           const createdLabel = t.createdAt ? 'создано ' + Utils.fmtShort(Utils.parseYMD(t.createdAt)) : '';
+
+          if (t.id === editingId) {
+            return `
+              <div class="task-item">
+                <button type="button" class="task-check" data-done="${t.id}"></button>
+                <div class="task-main">
+                  <input type="text" class="task-edit-input" data-edit-input="${t.id}" value="${escapeHtml(t.text)}" maxlength="140">
+                </div>
+                <button type="button" class="task-save" data-save="${t.id}">✓</button>
+              </div>`;
+          }
+
           return `
             <div class="task-item">
               <button type="button" class="task-check" data-done="${t.id}"></button>
-              <div class="task-main">
+              <div class="task-main" data-edit="${t.id}">
                 <div class="task-text">${escapeHtml(t.text)}</div>
                 ${createdLabel ? `<div class="task-meta">${createdLabel}</div>` : ''}
               </div>
@@ -975,6 +1135,25 @@
       });
       doneContainer.querySelectorAll('[data-undone]').forEach(btn => {
         btn.addEventListener('click', () => toggleUndone(btn.dataset.undone));
+      });
+
+      activeList.querySelectorAll('[data-edit]').forEach(el => {
+        el.addEventListener('click', () => startEdit(el.dataset.edit));
+      });
+      activeList.querySelectorAll('[data-save]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const input = activeList.querySelector(`[data-edit-input="${btn.dataset.save}"]`);
+          saveEdit(btn.dataset.save, input ? input.value : '');
+        });
+      });
+      activeList.querySelectorAll('.task-edit-input').forEach(input => {
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); saveEdit(input.dataset.editInput, input.value); }
+          if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+        });
+        input.addEventListener('blur', () => {
+          setTimeout(() => { if (editingId === input.dataset.editInput) saveEdit(input.dataset.editInput, input.value); }, 150);
+        });
       });
     }
 
@@ -1053,8 +1232,25 @@
     });
   }
 
+  function wireFeedback(){
+    const panel = document.getElementById('feedback-panel');
+    document.getElementById('feedback-btn').addEventListener('click', () => panel.classList.add('open'));
+    document.getElementById('feedback-close-btn').addEventListener('click', () => panel.classList.remove('open'));
+    document.getElementById('feedback-copy-btn').addEventListener('click', async () => {
+      const text = document.getElementById('feedback-text').value.trim();
+      if (!text) { Toast.show('Сначала напиши что-нибудь'); return; }
+      try {
+        await navigator.clipboard.writeText(text);
+        Toast.show('Скопировано — вставь в чат с Ариной');
+      } catch(e) {
+        Toast.show('Не получилось скопировать — выдели текст вручную');
+      }
+    });
+  }
+
   async function boot(){
     TG.init();
+    Theme.init();
     await Auth.loadAllowed();
 
     if (!Auth.isAuthorized()) {
@@ -1065,6 +1261,8 @@
     }
 
     document.getElementById('today-label').textContent = Utils.fmtLong(Utils.todayDate());
+    document.getElementById('theme-toggle-btn').addEventListener('click', () => Theme.toggle());
+    wireFeedback();
 
     await Meta.init();
     await Promise.all([Habits.init(), Mood.init(), Tasks.init()]);
