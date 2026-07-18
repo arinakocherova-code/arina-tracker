@@ -356,6 +356,14 @@
     outline:none; font-family:inherit; background:var(--surface); color:var(--ink);
   }
   .task-save{ flex:none; color:var(--primary-fill); font-size:18px; font-weight:800; padding:4px 8px; }
+
+  .habit-edit-input{
+    width:100%; padding:6px 8px; border-radius:8px;
+    border:1.5px solid var(--primary); font-size:15px; font-weight:700;
+    outline:none; font-family:inherit; background:var(--surface); color:var(--ink);
+  }
+  .habit-save{ flex:none; color:var(--primary-fill); font-size:18px; font-weight:800; padding:4px 8px; }
+  .habit-info[data-edit]{ cursor:text; }
 </style>
 </head>
 <body>
@@ -714,6 +722,7 @@
     let list = [];
     let monthCache = {}; // 'YYYY-MM' -> { '01': ['h1','h2'], ... }
     let pickedEmoji = HABIT_EMOJIS[0];
+    let editingId = null;
 
     function monthsToLoad(){
       const today = Utils.todayDate();
@@ -787,6 +796,31 @@
       render();
     }
 
+    function startEdit(id){
+      editingId = id;
+      render();
+      requestAnimationFrame(() => {
+        const input = document.querySelector('.habit-edit-input');
+        if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+      });
+    }
+
+    function saveEdit(id, newName){
+      const h = list.find(x => x.id === id);
+      if (h) {
+        const trimmed = newName.trim();
+        if (trimmed) h.name = trimmed;
+        Storage.setJSON('trk_habits_list', list);
+      }
+      editingId = null;
+      render();
+    }
+
+    function cancelEdit(){
+      editingId = null;
+      render();
+    }
+
     function renderEmojiPicker(){
       const wrap = document.getElementById('habit-emoji-pick');
       wrap.innerHTML = HABIT_EMOJIS.map(e =>
@@ -818,11 +852,26 @@
           if (isToday) cls.push('today');
           return `<button type="button" class="${cls.join(' ')}" data-habit="${h.id}" data-date="${Utils.fmtDate(d)}">${Utils.weekdayShort(d)[0]}</button>`;
         }).join('');
+
+        if (h.id === editingId) {
+          return `
+            <div class="habit-row">
+              <div class="habit-row-top">
+                <div class="habit-emoji">${h.emoji}</div>
+                <div class="habit-info">
+                  <input type="text" class="habit-edit-input" data-edit-input="${h.id}" value="${escapeHtml(h.name)}" maxlength="40">
+                </div>
+                <button type="button" class="habit-save" data-save="${h.id}">✓</button>
+              </div>
+              <div class="dot-strip">${dots}</div>
+            </div>`;
+        }
+
         return `
           <div class="habit-row">
             <div class="habit-row-top">
               <div class="habit-emoji">${h.emoji}</div>
-              <div class="habit-info">
+              <div class="habit-info" data-edit="${h.id}">
                 <div class="habit-name">${escapeHtml(h.name)}</div>
                 <div class="habit-streak${streak>0?' on':''}">${streak>0 ? '🔥 ' + streak + (streak===1?' день':streak<5?' дня':' дней') : 'нет серии'}</div>
               </div>
@@ -842,6 +891,25 @@
           TG.confirmMsg('Архивировать привычку? История сохранится.', (ok) => {
             if (ok) archiveHabit(btn.dataset.archive);
           });
+        });
+      });
+
+      container.querySelectorAll('.habit-info[data-edit]').forEach(el => {
+        el.addEventListener('click', () => startEdit(el.dataset.edit));
+      });
+      container.querySelectorAll('[data-save]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const input = container.querySelector(`[data-edit-input="${btn.dataset.save}"]`);
+          saveEdit(btn.dataset.save, input ? input.value : '');
+        });
+      });
+      container.querySelectorAll('.habit-edit-input').forEach(input => {
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); saveEdit(input.dataset.editInput, input.value); }
+          if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+        });
+        input.addEventListener('blur', () => {
+          setTimeout(() => { if (editingId === input.dataset.editInput) saveEdit(input.dataset.editInput, input.value); }, 150);
         });
       });
     }
