@@ -1,0 +1,30 @@
+name: Разовое объявление всем пользователям
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Текст сообщения для рассылки'
+        required: true
+        type: string
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Разослать сообщение всем из allowed-ids.txt
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          MSG: ${{ inputs.message }}
+        run: |
+          while IFS= read -r line; do
+            id=$(echo "$line" | awk '{print $1}')
+            if [[ "$id" =~ ^[0-9]+$ ]]; then
+              resp=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${id}" \
+                --data-urlencode "text=${MSG}")
+              echo "id=${id} response=${resp}"
+            fi
+          done < allowed-ids.txt
