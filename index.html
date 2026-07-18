@@ -230,6 +230,14 @@
   .mood-bar-label{ font-size:9px; color:var(--ink-soft); font-weight:600; }
 
   /* ---------- Sleep ---------- */
+  .sleep-date-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+  .sleep-date-row label{ font-size:12px; font-weight:700; color:var(--ink-soft); }
+  .sleep-date-row input[type="date"]{
+    padding:8px 10px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:13px; outline:none;
+    background:var(--surface); color:var(--ink); font-family:inherit;
+  }
+  .sleep-date-row input[type="date"]:focus{ border-color:var(--sleep); }
   .sleep-time-row{ display:flex; gap:10px; }
   .sleep-time-field{ flex:1; }
   .sleep-time-field label{ display:block; font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
@@ -475,6 +483,10 @@
     <section id="screen-sleep" class="screen">
       <div class="section-title">Режим сна</div>
       <div class="card">
+        <div class="sleep-date-row">
+          <label for="sleep-date-input">Запись за</label>
+          <input type="date" id="sleep-date-input">
+        </div>
         <div class="sleep-time-row">
           <div class="sleep-time-field">
             <label for="sleep-bed-input">Легла спать</label>
@@ -1106,6 +1118,7 @@
   const Sleep = (() => {
     const GOAL_HOURS = 6;
     let monthCache = {};
+    let selectedDate = Utils.todayDate();
 
     function monthsToLoad(){
       const today = Utils.todayDate();
@@ -1119,6 +1132,11 @@
       monthCache = {};
       monthsToLoad().forEach(m => { monthCache[m] = loaded['trk_sleep_' + m] || {}; });
       render();
+    }
+
+    async function ensureMonthLoaded(m){
+      if (monthCache[m]) return;
+      monthCache[m] = await Storage.getJSON('trk_sleep_' + m, {});
     }
 
     function entryFor(date){
@@ -1145,9 +1163,8 @@
       return `${h}ч ${m}мин`;
     }
 
-    function setToday(bed, wake){
-      const today = Utils.todayDate();
-      const m = Utils.monthKey(today), d = Utils.dayKey(today);
+    function setForDate(date, bed, wake){
+      const m = Utils.monthKey(date), d = Utils.dayKey(date);
       if (!monthCache[m]) monthCache[m] = {};
       const hours = computeHours(bed, wake);
       monthCache[m][d] = { bed: bed || null, wake: wake || null, hours };
@@ -1169,14 +1186,18 @@
 
     function render(){
       const today = Utils.todayDate();
-      const todayEntry = entryFor(today);
+      const selectedEntry = entryFor(selectedDate);
+
+      const dateInput = document.getElementById('sleep-date-input');
+      if (document.activeElement !== dateInput) dateInput.value = Utils.fmtDate(selectedDate);
+      dateInput.max = Utils.fmtDate(today);
 
       const bedInput = document.getElementById('sleep-bed-input');
       const wakeInput = document.getElementById('sleep-wake-input');
-      if (document.activeElement !== bedInput) bedInput.value = (todayEntry && todayEntry.bed) || '';
-      if (document.activeElement !== wakeInput) wakeInput.value = (todayEntry && todayEntry.wake) || '';
+      if (document.activeElement !== bedInput) bedInput.value = (selectedEntry && selectedEntry.bed) || '';
+      if (document.activeElement !== wakeInput) wakeInput.value = (selectedEntry && selectedEntry.wake) || '';
 
-      const hours = todayEntry ? todayEntry.hours : null;
+      const hours = selectedEntry ? selectedEntry.hours : null;
       document.getElementById('sleep-duration').textContent = fmtDuration(hours);
 
       const badge = document.getElementById('sleep-goal-badge');
@@ -1222,15 +1243,26 @@
     }
 
     function wireForm(){
+      const dateInput = document.getElementById('sleep-date-input');
       const bedInput = document.getElementById('sleep-bed-input');
       const wakeInput = document.getElementById('sleep-wake-input');
+
       function submit(){
-        setToday(bedInput.value, wakeInput.value);
+        setForDate(selectedDate, bedInput.value, wakeInput.value);
         TG.haptic('light');
         render();
       }
       bedInput.addEventListener('change', submit);
       wakeInput.addEventListener('change', submit);
+
+      dateInput.addEventListener('change', async () => {
+        if (!dateInput.value) return;
+        const picked = Utils.parseYMD(dateInput.value);
+        const today = Utils.todayDate();
+        selectedDate = picked > today ? today : picked; // будущее не выбрать
+        await ensureMonthLoaded(Utils.monthKey(selectedDate));
+        render();
+      });
     }
 
     return { init, wireForm };
