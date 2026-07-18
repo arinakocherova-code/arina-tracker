@@ -15,6 +15,7 @@
        чтобы контраст с белым текстом оставался достаточным в любой теме */
     --primary-fill:#4B6B57;
     --tasks-fill:#6E7F93;
+    --sleep-fill:#5B52A3;
 
     --bg:#EFF2EC;
     --surface:#FFFFFF;
@@ -30,6 +31,8 @@
     --mood-soft:#F3E6C8;
     --tasks:#6E7F93;
     --tasks-soft:#E1E6EC;
+    --sleep:#7B6FCE;
+    --sleep-soft:#E7E4F7;
 
     --danger:#B75C4F;
     --danger-soft:#F1DCD8;
@@ -44,6 +47,7 @@
       --primary:#7CAE8D; --primary-soft:rgba(124,174,141,.18);
       --mood:#E0B267; --mood-text:#F0C77B; --mood-soft:rgba(224,178,103,.16);
       --tasks:#93A6BB; --tasks-soft:rgba(147,166,187,.16);
+      --sleep:#A79EE0; --sleep-soft:rgba(167,158,224,.18);
       --danger:#E29184; --danger-soft:rgba(226,145,132,.16);
     }
   }
@@ -53,6 +57,7 @@
     --primary:#7CAE8D; --primary-soft:rgba(124,174,141,.18);
     --mood:#E0B267; --mood-text:#F0C77B; --mood-soft:rgba(224,178,103,.16);
     --tasks:#93A6BB; --tasks-soft:rgba(147,166,187,.16);
+    --sleep:#A79EE0; --sleep-soft:rgba(167,158,224,.18);
     --danger:#E29184; --danger-soft:rgba(226,145,132,.16);
   }
 
@@ -115,6 +120,7 @@
   .tab-btn.active{ color:var(--primary); background:var(--primary-soft); }
   .tab-btn[data-tab="mood"].active{ color:var(--mood-text); background:var(--mood-soft); }
   .tab-btn[data-tab="tasks"].active{ color:var(--tasks); background:var(--tasks-soft); }
+  .tab-btn[data-tab="sleep"].active{ color:var(--sleep); background:var(--sleep-soft); }
 
   /* ---------- Cards / shared ---------- */
   .card{
@@ -222,6 +228,31 @@
   .mood-bar{ width:100%; border-radius:5px 5px 2px 2px; background:var(--surface-2); min-height:6px; }
   .mood-bar.has{ background:var(--mood); }
   .mood-bar-label{ font-size:9px; color:var(--ink-soft); font-weight:600; }
+
+  /* ---------- Sleep ---------- */
+  .sleep-time-row{ display:flex; gap:10px; }
+  .sleep-time-field{ flex:1; }
+  .sleep-time-field label{ display:block; font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  .sleep-time-field input[type="time"]{
+    width:100%; padding:10px 12px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:16px; outline:none;
+    background:var(--surface); color:var(--ink); font-family:inherit;
+  }
+  .sleep-time-field input[type="time"]:focus{ border-color:var(--sleep); }
+
+  .sleep-result{ margin-top:16px; text-align:center; }
+  .sleep-duration{ font-size:36px; font-weight:800; color:var(--sleep); }
+  .sleep-goal-badge{ margin-top:6px; font-size:13px; font-weight:700; color:var(--ink-soft); }
+  .sleep-goal-badge.met{ color:var(--sleep); }
+  .sleep-streak{ margin-top:4px; font-size:12px; font-weight:600; color:var(--ink-soft); }
+
+  .sleep-chart{ display:flex; align-items:flex-end; gap:4px; height:96px; padding-top:8px; position:relative; }
+  .sleep-goal-line{ position:absolute; left:0; right:0; border-top:1.5px dashed var(--line); }
+  .sleep-bar-col{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; position:relative; z-index:1; }
+  .sleep-bar{ width:100%; border-radius:5px 5px 2px 2px; background:var(--surface-2); min-height:6px; }
+  .sleep-bar.has{ background:var(--sleep); }
+  .sleep-bar.short{ background:var(--danger-soft); }
+  .sleep-bar-label{ font-size:9px; color:var(--ink-soft); font-weight:600; }
 
   /* ---------- Tasks ---------- */
   .task-input-row{ display:flex; gap:8px; }
@@ -441,6 +472,31 @@
       </div>
     </section>
 
+    <section id="screen-sleep" class="screen">
+      <div class="section-title">Режим сна</div>
+      <div class="card">
+        <div class="sleep-time-row">
+          <div class="sleep-time-field">
+            <label for="sleep-bed-input">Легла спать</label>
+            <input type="time" id="sleep-bed-input">
+          </div>
+          <div class="sleep-time-field">
+            <label for="sleep-wake-input">Встала</label>
+            <input type="time" id="sleep-wake-input">
+          </div>
+        </div>
+        <div class="sleep-result">
+          <div class="sleep-duration" id="sleep-duration">—</div>
+          <div class="sleep-goal-badge" id="sleep-goal-badge">Цель — 6 часов</div>
+          <div class="sleep-streak" id="sleep-streak"></div>
+        </div>
+      </div>
+      <div class="section-title">Последние 14 дней</div>
+      <div class="card">
+        <div class="sleep-chart" id="sleep-chart"></div>
+      </div>
+    </section>
+
     <section id="screen-tasks" class="screen">
       <div class="section-title">Задачи</div>
       <div class="card">
@@ -475,6 +531,10 @@
     <button class="tab-btn" data-tab="tasks">
       <svg viewBox="0 0 24 24" fill="none"><path d="M9 6h11M9 12h11M9 18h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Задачи
+    </button>
+    <button class="tab-btn" data-tab="sleep">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Сон
     </button>
   </nav>
 
@@ -1042,6 +1102,140 @@
     return { init, wireForm };
   })();
 
+  // ============ Sleep ============
+  const Sleep = (() => {
+    const GOAL_HOURS = 6;
+    let monthCache = {};
+
+    function monthsToLoad(){
+      const today = Utils.todayDate();
+      const prev = Utils.addDays(today, -31);
+      return Array.from(new Set([Utils.monthKey(today), Utils.monthKey(prev)]));
+    }
+
+    async function init(){
+      const keys = monthsToLoad().map(m => 'trk_sleep_' + m);
+      const loaded = await Storage.getJSONMulti(keys, () => ({}));
+      monthCache = {};
+      monthsToLoad().forEach(m => { monthCache[m] = loaded['trk_sleep_' + m] || {}; });
+      render();
+    }
+
+    function entryFor(date){
+      const m = Utils.monthKey(date), d = Utils.dayKey(date);
+      return (monthCache[m] && monthCache[m][d]) || null;
+    }
+
+    function saveMonth(m){ Storage.setJSON('trk_sleep_' + m, monthCache[m]); }
+
+    function computeHours(bed, wake){
+      if (!bed || !wake) return null;
+      const [bh, bm] = bed.split(':').map(Number);
+      const [wh, wm] = wake.split(':').map(Number);
+      let bedMin = bh * 60 + bm;
+      let wakeMin = wh * 60 + wm;
+      if (wakeMin <= bedMin) wakeMin += 24 * 60; // легла вечером, встала на следующий день
+      return Math.round(((wakeMin - bedMin) / 60) * 100) / 100;
+    }
+
+    function fmtDuration(hours){
+      if (hours == null) return '—';
+      const h = Math.floor(hours);
+      const m = Math.round((hours - h) * 60);
+      return `${h}ч ${m}мин`;
+    }
+
+    function setToday(bed, wake){
+      const today = Utils.todayDate();
+      const m = Utils.monthKey(today), d = Utils.dayKey(today);
+      if (!monthCache[m]) monthCache[m] = {};
+      const hours = computeHours(bed, wake);
+      monthCache[m][d] = { bed: bed || null, wake: wake || null, hours };
+      saveMonth(m);
+    }
+
+    function computeStreak(){
+      let streak = 0;
+      let cursor = Utils.todayDate();
+      for (let i = 0; i < 62; i++) {
+        const m = Utils.monthKey(cursor);
+        if (!monthCache[m]) break;
+        const entry = entryFor(cursor);
+        if (entry && entry.hours != null && entry.hours >= GOAL_HOURS) { streak++; cursor = Utils.addDays(cursor, -1); }
+        else break;
+      }
+      return streak;
+    }
+
+    function render(){
+      const today = Utils.todayDate();
+      const todayEntry = entryFor(today);
+
+      const bedInput = document.getElementById('sleep-bed-input');
+      const wakeInput = document.getElementById('sleep-wake-input');
+      if (document.activeElement !== bedInput) bedInput.value = (todayEntry && todayEntry.bed) || '';
+      if (document.activeElement !== wakeInput) wakeInput.value = (todayEntry && todayEntry.wake) || '';
+
+      const hours = todayEntry ? todayEntry.hours : null;
+      document.getElementById('sleep-duration').textContent = fmtDuration(hours);
+
+      const badge = document.getElementById('sleep-goal-badge');
+      if (hours == null) {
+        badge.textContent = `Цель — ${GOAL_HOURS} часов`;
+        badge.classList.remove('met');
+      } else if (hours >= GOAL_HOURS) {
+        badge.textContent = `Цель выполнена ✓ (${GOAL_HOURS}ч)`;
+        badge.classList.add('met');
+      } else {
+        const lack = fmtDuration(GOAL_HOURS - hours);
+        badge.textContent = `Не хватило ${lack} до цели`;
+        badge.classList.remove('met');
+      }
+
+      const streak = computeStreak();
+      document.getElementById('sleep-streak').textContent = streak > 0
+        ? `🌙 ${streak} ${streak===1?'день':streak<5?'дня':'дней'} подряд по норме`
+        : '';
+
+      const chart = document.getElementById('sleep-chart');
+      const days = [];
+      for (let i = 13; i >= 0; i--) days.push(Utils.addDays(today, -i));
+      const maxScale = 10; // часов, для масштаба графика
+      chart.innerHTML = `<div class="sleep-goal-line" style="bottom:${(GOAL_HOURS/maxScale*100)}%"></div>` + days.map(d => {
+        const entry = entryFor(d);
+        const h = entry && entry.hours != null ? Math.min(entry.hours, maxScale) / maxScale * 100 : 4;
+        const met = entry && entry.hours != null && entry.hours >= GOAL_HOURS;
+        const cls = entry && entry.hours != null ? (met ? 'has' : 'short') : '';
+        return `<div class="sleep-bar-col" data-date="${Utils.fmtDate(d)}" title="${Utils.fmtShort(d)}">
+          <div class="sleep-bar ${cls}" style="height:${h}%"></div>
+          <div class="sleep-bar-label">${d.getDate()}</div>
+        </div>`;
+      }).join('');
+      chart.querySelectorAll('.sleep-bar-col').forEach(col => {
+        col.addEventListener('click', () => {
+          const d = Utils.parseYMD(col.dataset.date);
+          const entry = entryFor(d);
+          if (!entry || entry.hours == null) { Toast.show(Utils.fmtLong(d) + ' — нет записи'); return; }
+          Toast.show(`${Utils.fmtLong(d)}: ${fmtDuration(entry.hours)}`, 3200);
+        });
+      });
+    }
+
+    function wireForm(){
+      const bedInput = document.getElementById('sleep-bed-input');
+      const wakeInput = document.getElementById('sleep-wake-input');
+      function submit(){
+        setToday(bedInput.value, wakeInput.value);
+        TG.haptic('light');
+        render();
+      }
+      bedInput.addEventListener('change', submit);
+      wakeInput.addEventListener('change', submit);
+    }
+
+    return { init, wireForm };
+  })();
+
   // ============ Tasks ============
   const Tasks = (() => {
     let active = [];
@@ -1335,11 +1529,12 @@
     wireFeedback();
 
     await Meta.init();
-    await Promise.all([Habits.init(), Mood.init(), Tasks.init()]);
+    await Promise.all([Habits.init(), Mood.init(), Tasks.init(), Sleep.init()]);
 
     Habits.wireForm();
     Mood.wireForm();
     Tasks.wireForm();
+    Sleep.wireForm();
     Nav.wire();
     Nav.switchTo(Meta.get().activeTab || 'habits');
   }
