@@ -248,10 +248,21 @@
   }
   .sleep-time-field input[type="time"]:focus{ border-color:var(--sleep); }
 
+  .sleep-nap-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
+  .sleep-nap-row label{ font-size:12px; font-weight:700; color:var(--ink-soft); }
+  .sleep-nap-row input[type="number"]{
+    width:90px; padding:8px 10px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:14px; outline:none;
+    background:var(--surface); color:var(--ink); font-family:inherit;
+    text-align:right;
+  }
+  .sleep-nap-row input[type="number"]:focus{ border-color:var(--sleep); }
+
   .sleep-result{ margin-top:16px; text-align:center; }
   .sleep-duration{ font-size:36px; font-weight:800; color:var(--sleep); }
   .sleep-goal-badge{ margin-top:6px; font-size:13px; font-weight:700; color:var(--ink-soft); }
   .sleep-goal-badge.met{ color:var(--sleep); }
+  .sleep-nap-note{ margin-top:2px; font-size:12px; font-weight:600; color:var(--ink-soft); }
   .sleep-streak{ margin-top:4px; font-size:12px; font-weight:600; color:var(--ink-soft); }
 
   .sleep-chart{ display:flex; align-items:flex-end; gap:4px; height:96px; padding-top:8px; position:relative; }
@@ -497,9 +508,14 @@
             <input type="time" id="sleep-wake-input">
           </div>
         </div>
+        <div class="sleep-nap-row">
+          <label for="sleep-nap-input">Дневной сон, мин</label>
+          <input type="number" id="sleep-nap-input" min="0" max="600" step="5" placeholder="0">
+        </div>
         <div class="sleep-result">
           <div class="sleep-duration" id="sleep-duration">—</div>
           <div class="sleep-goal-badge" id="sleep-goal-badge">Цель — 6 часов</div>
+          <div class="sleep-nap-note" id="sleep-nap-note"></div>
           <div class="sleep-streak" id="sleep-streak"></div>
         </div>
       </div>
@@ -1163,11 +1179,13 @@
       return `${h}ч ${m}мин`;
     }
 
-    function setForDate(date, bed, wake){
+    function setForDate(date, bed, wake, napMinutes){
       const m = Utils.monthKey(date), d = Utils.dayKey(date);
       if (!monthCache[m]) monthCache[m] = {};
-      const hours = computeHours(bed, wake);
-      monthCache[m][d] = { bed: bed || null, wake: wake || null, hours };
+      const nap = napMinutes || 0;
+      const nightHours = computeHours(bed, wake);
+      const hours = nightHours == null ? (nap > 0 ? nap / 60 : null) : nightHours + nap / 60;
+      monthCache[m][d] = { bed: bed || null, wake: wake || null, nap, hours };
       saveMonth(m);
     }
 
@@ -1194,11 +1212,16 @@
 
       const bedInput = document.getElementById('sleep-bed-input');
       const wakeInput = document.getElementById('sleep-wake-input');
+      const napInput = document.getElementById('sleep-nap-input');
       if (document.activeElement !== bedInput) bedInput.value = (selectedEntry && selectedEntry.bed) || '';
       if (document.activeElement !== wakeInput) wakeInput.value = (selectedEntry && selectedEntry.wake) || '';
+      if (document.activeElement !== napInput) napInput.value = (selectedEntry && selectedEntry.nap) || '';
 
       const hours = selectedEntry ? selectedEntry.hours : null;
       document.getElementById('sleep-duration').textContent = fmtDuration(hours);
+
+      const napNote = document.getElementById('sleep-nap-note');
+      napNote.textContent = (selectedEntry && selectedEntry.nap > 0) ? `из них днём: ${selectedEntry.nap} мин` : '';
 
       const badge = document.getElementById('sleep-goal-badge');
       if (hours == null) {
@@ -1246,14 +1269,17 @@
       const dateInput = document.getElementById('sleep-date-input');
       const bedInput = document.getElementById('sleep-bed-input');
       const wakeInput = document.getElementById('sleep-wake-input');
+      const napInput = document.getElementById('sleep-nap-input');
 
       function submit(){
-        setForDate(selectedDate, bedInput.value, wakeInput.value);
+        const nap = napInput.value ? parseInt(napInput.value, 10) : 0;
+        setForDate(selectedDate, bedInput.value, wakeInput.value, nap);
         TG.haptic('light');
         render();
       }
       bedInput.addEventListener('change', submit);
       wakeInput.addEventListener('change', submit);
+      napInput.addEventListener('change', submit);
 
       dateInput.addEventListener('change', async () => {
         if (!dateInput.value) return;
