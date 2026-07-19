@@ -248,15 +248,11 @@
   }
   .sleep-time-field input[type="time"]:focus{ border-color:var(--sleep); }
 
-  .sleep-nap-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
-  .sleep-nap-row label{ font-size:12px; font-weight:700; color:var(--ink-soft); }
-  .sleep-nap-row input[type="number"]{
-    width:90px; padding:8px 10px; border-radius:var(--radius-sm);
-    border:1.5px solid var(--line); font-size:14px; outline:none;
-    background:var(--surface); color:var(--ink); font-family:inherit;
-    text-align:right;
+  .sleep-nap-label{
+    margin-top:18px; padding-top:14px; border-top:1px solid var(--line);
+    font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em;
+    margin-bottom:10px;
   }
-  .sleep-nap-row input[type="number"]:focus{ border-color:var(--sleep); }
 
   .sleep-result{ margin-top:16px; text-align:center; }
   .sleep-duration{ font-size:36px; font-weight:800; color:var(--sleep); }
@@ -508,9 +504,16 @@
             <input type="time" id="sleep-wake-input">
           </div>
         </div>
-        <div class="sleep-nap-row">
-          <label for="sleep-nap-input">Дневной сон, мин</label>
-          <input type="number" id="sleep-nap-input" min="0" max="600" step="5" placeholder="0">
+        <div class="sleep-nap-label">Дневной сон</div>
+        <div class="sleep-time-row">
+          <div class="sleep-time-field">
+            <label for="sleep-nap-from-input">С</label>
+            <input type="time" id="sleep-nap-from-input">
+          </div>
+          <div class="sleep-time-field">
+            <label for="sleep-nap-to-input">До</label>
+            <input type="time" id="sleep-nap-to-input">
+          </div>
         </div>
         <div class="sleep-result">
           <div class="sleep-duration" id="sleep-duration">—</div>
@@ -1179,13 +1182,35 @@
       return `${h}ч ${m}мин`;
     }
 
-    function setForDate(date, bed, wake, napMinutes){
+    function fmtMinutes(mins){
+      if (!mins) return '0 мин';
+      if (mins < 60) return `${mins} мин`;
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return m > 0 ? `${h}ч ${m}мин` : `${h}ч`;
+    }
+
+    // То же правило, что и для ночного сна — если "до" раньше "с", считаем через полночь.
+    function computeNapMinutes(from, to){
+      if (!from || !to) return 0;
+      const [fh, fm] = from.split(':').map(Number);
+      const [th, tm] = to.split(':').map(Number);
+      let fromMin = fh * 60 + fm;
+      let toMin = th * 60 + tm;
+      if (toMin <= fromMin) toMin += 24 * 60;
+      return toMin - fromMin;
+    }
+
+    function setForDate(date, bed, wake, napFrom, napTo){
       const m = Utils.monthKey(date), d = Utils.dayKey(date);
       if (!monthCache[m]) monthCache[m] = {};
-      const nap = napMinutes || 0;
+      const nap = computeNapMinutes(napFrom, napTo);
       const nightHours = computeHours(bed, wake);
       const hours = nightHours == null ? (nap > 0 ? nap / 60 : null) : nightHours + nap / 60;
-      monthCache[m][d] = { bed: bed || null, wake: wake || null, nap, hours };
+      monthCache[m][d] = {
+        bed: bed || null, wake: wake || null,
+        napFrom: napFrom || null, napTo: napTo || null, nap,
+        hours
+      };
       saveMonth(m);
     }
 
@@ -1212,16 +1237,18 @@
 
       const bedInput = document.getElementById('sleep-bed-input');
       const wakeInput = document.getElementById('sleep-wake-input');
-      const napInput = document.getElementById('sleep-nap-input');
+      const napFromInput = document.getElementById('sleep-nap-from-input');
+      const napToInput = document.getElementById('sleep-nap-to-input');
       if (document.activeElement !== bedInput) bedInput.value = (selectedEntry && selectedEntry.bed) || '';
       if (document.activeElement !== wakeInput) wakeInput.value = (selectedEntry && selectedEntry.wake) || '';
-      if (document.activeElement !== napInput) napInput.value = (selectedEntry && selectedEntry.nap) || '';
+      if (document.activeElement !== napFromInput) napFromInput.value = (selectedEntry && selectedEntry.napFrom) || '';
+      if (document.activeElement !== napToInput) napToInput.value = (selectedEntry && selectedEntry.napTo) || '';
 
       const hours = selectedEntry ? selectedEntry.hours : null;
       document.getElementById('sleep-duration').textContent = fmtDuration(hours);
 
       const napNote = document.getElementById('sleep-nap-note');
-      napNote.textContent = (selectedEntry && selectedEntry.nap > 0) ? `из них днём: ${selectedEntry.nap} мин` : '';
+      napNote.textContent = (selectedEntry && selectedEntry.nap > 0) ? `из них днём: ${fmtMinutes(selectedEntry.nap)}` : '';
 
       const badge = document.getElementById('sleep-goal-badge');
       if (hours == null) {
@@ -1269,17 +1296,18 @@
       const dateInput = document.getElementById('sleep-date-input');
       const bedInput = document.getElementById('sleep-bed-input');
       const wakeInput = document.getElementById('sleep-wake-input');
-      const napInput = document.getElementById('sleep-nap-input');
+      const napFromInput = document.getElementById('sleep-nap-from-input');
+      const napToInput = document.getElementById('sleep-nap-to-input');
 
       function submit(){
-        const nap = napInput.value ? parseInt(napInput.value, 10) : 0;
-        setForDate(selectedDate, bedInput.value, wakeInput.value, nap);
+        setForDate(selectedDate, bedInput.value, wakeInput.value, napFromInput.value, napToInput.value);
         TG.haptic('light');
         render();
       }
       bedInput.addEventListener('change', submit);
       wakeInput.addEventListener('change', submit);
-      napInput.addEventListener('change', submit);
+      napFromInput.addEventListener('change', submit);
+      napToInput.addEventListener('change', submit);
 
       dateInput.addEventListener('change', async () => {
         if (!dateInput.value) return;
