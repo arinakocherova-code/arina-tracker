@@ -204,6 +204,14 @@
   .btn-ghost{ background:var(--surface-2); color:var(--ink-soft); }
 
   /* ---------- Mood ---------- */
+  .mood-date-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; }
+  .mood-date-row label{ font-size:12px; font-weight:700; color:var(--ink-soft); }
+  .mood-date-row input[type="date"]{
+    padding:8px 10px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line); font-size:13px; outline:none;
+    background:var(--surface); color:var(--ink); font-family:inherit;
+  }
+  .mood-date-row input[type="date"]:focus{ border-color:var(--mood); }
   .mood-picker{ display:flex; justify-content:space-between; gap:6px; }
   .mood-opt{
     flex:1; aspect-ratio:1; border-radius:var(--radius-sm);
@@ -475,6 +483,10 @@
     <section id="screen-mood" class="screen">
       <div class="section-title">Как настроение сегодня?</div>
       <div class="card">
+        <div class="mood-date-row">
+          <label for="mood-date-input">Запись за</label>
+          <input type="date" id="mood-date-input">
+        </div>
         <div class="mood-picker" id="mood-picker"></div>
         <div class="mood-note">
           <textarea id="mood-note-input" maxlength="100" placeholder="Пара слов о дне (необязательно)"></textarea>
@@ -1039,6 +1051,7 @@
       { v:1, emoji:'😞' }, { v:2, emoji:'🙁' }, { v:3, emoji:'😐' }, { v:4, emoji:'🙂' }, { v:5, emoji:'😄' }
     ];
     let monthCache = {};
+    let selectedDate = Utils.todayDate();
 
     function monthsToLoad(){
       const today = Utils.todayDate();
@@ -1054,6 +1067,11 @@
       render();
     }
 
+    async function ensureMonthLoaded(m){
+      if (monthCache[m]) return;
+      monthCache[m] = await Storage.getJSON('trk_mood_' + m, {});
+    }
+
     function entryFor(date){
       const m = Utils.monthKey(date), d = Utils.dayKey(date);
       return (monthCache[m] && monthCache[m][d]) || null;
@@ -1061,9 +1079,8 @@
 
     function saveMonth(m){ Storage.setJSON('trk_mood_' + m, monthCache[m]); }
 
-    function setToday(value, note){
-      const today = Utils.todayDate();
-      const m = Utils.monthKey(today), d = Utils.dayKey(today);
+    function setForDate(date, value, note){
+      const m = Utils.monthKey(date), d = Utils.dayKey(date);
       if (!monthCache[m]) monthCache[m] = {};
       const entry = { v: value };
       if (note && note.trim()) entry.n = note.trim().slice(0,100);
@@ -1073,17 +1090,21 @@
 
     function render(){
       const today = Utils.todayDate();
-      const todayEntry = entryFor(today);
+      const selectedEntry = entryFor(selectedDate);
+
+      const dateInput = document.getElementById('mood-date-input');
+      if (document.activeElement !== dateInput) dateInput.value = Utils.fmtDate(selectedDate);
+      dateInput.max = Utils.fmtDate(today);
 
       const picker = document.getElementById('mood-picker');
       picker.innerHTML = SCALE.map(s =>
-        `<button type="button" class="mood-opt${todayEntry && todayEntry.v===s.v ? ' sel':''}" data-v="${s.v}">${s.emoji}</button>`
+        `<button type="button" class="mood-opt${selectedEntry && selectedEntry.v===s.v ? ' sel':''}" data-v="${s.v}">${s.emoji}</button>`
       ).join('');
       picker.querySelectorAll('.mood-opt').forEach(btn => {
         btn.addEventListener('click', () => {
           const v = Number(btn.dataset.v);
           const note = document.getElementById('mood-note-input').value;
-          setToday(v, note);
+          setForDate(selectedDate, v, note);
           TG.haptic('medium');
           render();
           Toast.show('Настроение сохранено');
@@ -1091,7 +1112,7 @@
       });
 
       const noteInput = document.getElementById('mood-note-input');
-      if (document.activeElement !== noteInput) noteInput.value = (todayEntry && todayEntry.n) || '';
+      if (document.activeElement !== noteInput) noteInput.value = (selectedEntry && selectedEntry.n) || '';
       document.getElementById('mood-note-count').textContent = String(noteInput.value.length);
 
       const chart = document.getElementById('mood-chart');
@@ -1123,10 +1144,19 @@
         document.getElementById('mood-note-count').textContent = String(noteInput.value.length);
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
-          const today = Utils.todayDate();
-          const existing = entryFor(today);
-          setToday(existing ? existing.v : 3, noteInput.value);
+          const existing = entryFor(selectedDate);
+          setForDate(selectedDate, existing ? existing.v : 3, noteInput.value);
         }, 500);
+      });
+
+      const dateInput = document.getElementById('mood-date-input');
+      dateInput.addEventListener('change', async () => {
+        if (!dateInput.value) return;
+        const picked = Utils.parseYMD(dateInput.value);
+        const today = Utils.todayDate();
+        selectedDate = picked > today ? today : picked; // будущее не выбрать
+        await ensureMonthLoaded(Utils.monthKey(selectedDate));
+        render();
       });
     }
 
