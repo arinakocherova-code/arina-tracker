@@ -163,6 +163,41 @@
   .dot.future{ opacity:.35; pointer-events:none; }
   .dot:active{ transform:scale(.88); }
   .habit-menu-btn{ flex:none; padding:6px; color:var(--ink-soft); font-size:16px; }
+  .habit-history-btn{ flex:none; padding:6px; color:var(--ink-soft); font-size:15px; }
+  .habit-emoji img.habit-sticker-img{ width:24px; height:24px; object-fit:cover; border-radius:6px; vertical-align:middle; }
+  .emoji-opt img.habit-sticker-img{ width:20px; height:20px; object-fit:cover; border-radius:5px; }
+
+  /* ---------- История привычки ---------- */
+  .habit-history-card{ max-width:360px; }
+  .habit-history-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .habit-history-title{ font-size:16px; font-weight:800; display:flex; align-items:center; gap:8px; }
+  .habit-history-title img.habit-sticker-img{ width:22px; height:22px; object-fit:cover; border-radius:5px; }
+  .habit-history-close{ flex:none; padding:6px; color:var(--ink-soft); font-size:15px; }
+  .habit-history-since{ font-size:12px; color:var(--ink-soft); margin-top:2px; margin-bottom:14px; }
+  .habit-history-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .habit-history-nav-btn{
+    width:32px; height:32px; border-radius:var(--radius-sm);
+    background:var(--surface-2); font-size:18px; font-weight:700; color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .habit-history-nav-btn:disabled{ opacity:.3; }
+  .habit-history-month{ font-size:14px; font-weight:700; }
+  .habit-history-weekdays{
+    display:grid; grid-template-columns:repeat(7,1fr); gap:4px;
+    font-size:10px; font-weight:700; color:var(--ink-soft); text-align:center; margin-bottom:6px;
+  }
+  .habit-history-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .habit-history-cell{
+    aspect-ratio:1; border-radius:8px; background:var(--surface-2);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    font-size:10px; color:var(--ink-soft);
+  }
+  .habit-history-cell.empty{ background:transparent; }
+  .habit-history-cell.future{ opacity:.35; }
+  .habit-history-cell.done{ background:var(--primary-soft); color:var(--ink); }
+  .habit-history-daynum{ font-size:10px; font-weight:600; }
+  .habit-history-sticker{ font-size:13px; line-height:1; }
+  .habit-history-sticker img.habit-sticker-img{ width:14px; height:14px; object-fit:cover; border-radius:3px; }
 
   .add-row{
     margin-top:12px;
@@ -464,6 +499,23 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="habit-history-panel">
+    <div class="modal-card habit-history-card">
+      <div class="habit-history-header">
+        <div class="habit-history-title" id="habit-history-title"></div>
+        <button type="button" class="habit-history-close" id="habit-history-close-btn">✕</button>
+      </div>
+      <div class="habit-history-since" id="habit-history-since"></div>
+      <div class="habit-history-nav">
+        <button type="button" class="habit-history-nav-btn" id="habit-history-prev-btn">‹</button>
+        <div class="habit-history-month" id="habit-history-month"></div>
+        <button type="button" class="habit-history-nav-btn" id="habit-history-next-btn">›</button>
+      </div>
+      <div class="habit-history-weekdays" id="habit-history-weekdays"></div>
+      <div class="habit-history-grid" id="habit-history-grid"></div>
+    </div>
+  </div>
+
   <main class="app-main">
 
     <section id="screen-habits" class="screen">
@@ -606,7 +658,11 @@
       return `${WD[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
     }
     function weekdayShort(d){ return WEEKDAYS[d.getDay()]; }
-    return { pad, fmtDate, todayDate, todayStr, monthKey, dayKey, addDays, parseYMD, fmtShort, fmtLong, weekdayShort };
+    const MONTHS_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    function monthLabel(m){ const [y, mo] = m.split('-').map(Number); return `${MONTHS_FULL[mo-1]} ${y}`; }
+    function shiftMonth(m, delta){ const [y, mo] = m.split('-').map(Number); return monthKey(new Date(y, mo-1+delta, 1)); }
+    function daysInMonth(m){ const [y, mo] = m.split('-').map(Number); return new Date(y, mo, 0).getDate(); }
+    return { pad, fmtDate, todayDate, todayStr, monthKey, dayKey, addDays, parseYMD, fmtShort, fmtLong, weekdayShort, monthLabel, shiftMonth, daysInMonth };
   })();
 
   // ============ Telegram SDK wrapper ============
@@ -716,8 +772,11 @@
           return;
         }
         try {
-          cloud.getItems(keys, (err, values) => resolve(err ? {} : (values || {})));
-        } catch(e) { resolve({}); }
+          cloud.getItems(keys, (err, values) => {
+            if (err) { const out = {}; keys.forEach(k => out[k] = localStorage.getItem(k)); resolve(out); return; }
+            resolve(values || {});
+          });
+        } catch(e) { const out = {}; keys.forEach(k => out[k] = localStorage.getItem(k)); resolve(out); }
       });
     }
 
@@ -821,11 +880,20 @@
 
   // ============ Habits ============
   const Habits = (() => {
-    const HABIT_EMOJIS = ['🧘','📖','💧','🏃','🥗','😴','✍️','🎯','🧹','🚭','💊','🌱'];
+    const CLAUDE_STICKER_KEY = 'claude';
+    const CLAUDE_STICKER_SRC = 'data:image/jpeg;base64,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';
+    const HABIT_EMOJIS = ['🧘','📖','💧','🏃','🥗','😴','✍️','🎯','🧹','🚭','💊','🌱','✅','❌', CLAUDE_STICKER_KEY];
+    function stickerHtml(value){
+      return value === CLAUDE_STICKER_KEY
+        ? `<img class="habit-sticker-img" src="${CLAUDE_STICKER_SRC}" alt="Claude">`
+        : value;
+    }
     let list = [];
     let monthCache = {}; // 'YYYY-MM' -> { '01': ['h1','h2'], ... }
     let pickedEmoji = HABIT_EMOJIS[0];
     let editingId = null;
+    let historyHabitId = null;
+    let historyMonth = null;
 
     function monthsToLoad(){
       const today = Utils.todayDate();
@@ -845,6 +913,11 @@
     function ensureMonth(m){
       if (!monthCache[m]) monthCache[m] = {};
       return monthCache[m];
+    }
+
+    async function ensureMonthLoaded(m){
+      if (monthCache[m]) return;
+      monthCache[m] = await Storage.getJSON('trk_habits_' + m, {});
     }
 
     function isDone(habitId, date){
@@ -927,11 +1000,80 @@
     function renderEmojiPicker(){
       const wrap = document.getElementById('habit-emoji-pick');
       wrap.innerHTML = HABIT_EMOJIS.map(e =>
-        `<button type="button" class="emoji-opt${e===pickedEmoji?' sel':''}" data-emoji="${e}">${e}</button>`
+        `<button type="button" class="emoji-opt${e===pickedEmoji?' sel':''}" data-emoji="${e}">${stickerHtml(e)}</button>`
       ).join('');
       wrap.querySelectorAll('.emoji-opt').forEach(btn => {
         btn.addEventListener('click', () => { pickedEmoji = btn.dataset.emoji; renderEmojiPicker(); });
       });
+    }
+
+    async function openHistory(habitId){
+      historyHabitId = habitId;
+      historyMonth = Utils.monthKey(Utils.todayDate());
+      await ensureMonthLoaded(historyMonth);
+      document.getElementById('habit-history-panel').classList.add('open');
+      renderHistory();
+    }
+
+    function closeHistory(){
+      document.getElementById('habit-history-panel').classList.remove('open');
+      historyHabitId = null;
+    }
+
+    async function navHistory(delta){
+      const todayKey = Utils.monthKey(Utils.todayDate());
+      const next = Utils.shiftMonth(historyMonth, delta);
+      if (next > todayKey) return;
+      const h = list.find(x => x.id === historyHabitId);
+      const createdMonthKey = h && h.createdAt ? Utils.monthKey(Utils.parseYMD(h.createdAt)) : null;
+      if (createdMonthKey && next < createdMonthKey) return;
+      historyMonth = next;
+      await ensureMonthLoaded(historyMonth);
+      renderHistory();
+    }
+
+    function renderHistory(){
+      const h = list.find(x => x.id === historyHabitId);
+      if (!h) return;
+
+      document.getElementById('habit-history-title').innerHTML = `${stickerHtml(h.emoji)} ${escapeHtml(h.name)}`;
+      const createdDate = h.createdAt ? Utils.parseYMD(h.createdAt) : null;
+      document.getElementById('habit-history-since').textContent = createdDate ? `Ведёшь с ${Utils.fmtLong(createdDate)}` : '';
+      document.getElementById('habit-history-month').textContent = Utils.monthLabel(historyMonth);
+
+      const todayKey = Utils.monthKey(Utils.todayDate());
+      document.getElementById('habit-history-next-btn').disabled = historyMonth >= todayKey;
+      const createdMonthKey = h.createdAt ? Utils.monthKey(Utils.parseYMD(h.createdAt)) : null;
+      document.getElementById('habit-history-prev-btn').disabled = !!createdMonthKey && historyMonth <= createdMonthKey;
+
+      const weekdaysRow = document.getElementById('habit-history-weekdays');
+      if (!weekdaysRow.childElementCount) {
+        weekdaysRow.innerHTML = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(w => `<div>${w}</div>`).join('');
+      }
+
+      const [y, mo] = historyMonth.split('-').map(Number);
+      const total = Utils.daysInMonth(historyMonth);
+      const jsWeekday = new Date(y, mo-1, 1).getDay(); // 0=вс
+      const leadingBlanks = (jsWeekday + 6) % 7; // 0=пн
+
+      const monthEntries = monthCache[historyMonth] || {};
+      const today = Utils.todayDate();
+      const cells = [];
+      for (let i = 0; i < leadingBlanks; i++) cells.push('<div class="habit-history-cell empty"></div>');
+      for (let day = 1; day <= total; day++) {
+        const d = new Date(y, mo-1, day);
+        const dk = Utils.dayKey(d);
+        const done = (monthEntries[dk] || []).indexOf(historyHabitId) !== -1;
+        const isFuture = d > today;
+        const cls = ['habit-history-cell'];
+        if (isFuture) cls.push('future');
+        if (done) cls.push('done');
+        cells.push(`<div class="${cls.join(' ')}">
+          <span class="habit-history-daynum">${day}</span>
+          ${done ? `<span class="habit-history-sticker">${stickerHtml(h.emoji)}</span>` : ''}
+        </div>`);
+      }
+      document.getElementById('habit-history-grid').innerHTML = cells.join('');
     }
 
     function render(){
@@ -960,7 +1102,7 @@
           return `
             <div class="habit-row">
               <div class="habit-row-top">
-                <div class="habit-emoji">${h.emoji}</div>
+                <div class="habit-emoji">${stickerHtml(h.emoji)}</div>
                 <div class="habit-info">
                   <input type="text" class="habit-edit-input" data-edit-input="${h.id}" value="${escapeHtml(h.name)}" maxlength="40">
                 </div>
@@ -973,11 +1115,12 @@
         return `
           <div class="habit-row">
             <div class="habit-row-top">
-              <div class="habit-emoji">${h.emoji}</div>
+              <div class="habit-emoji">${stickerHtml(h.emoji)}</div>
               <div class="habit-info" data-edit="${h.id}">
                 <div class="habit-name">${escapeHtml(h.name)}</div>
                 <div class="habit-streak${streak>0?' on':''}">${streak>0 ? '🔥 ' + streak + (streak===1?' день':streak<5?' дня':' дней') : 'нет серии'}</div>
               </div>
+              <button type="button" class="habit-history-btn" data-history="${h.id}">🗓</button>
               <button type="button" class="habit-menu-btn" data-archive="${h.id}">⋯</button>
             </div>
             <div class="dot-strip">${dots}</div>
@@ -995,6 +1138,9 @@
             if (ok) archiveHabit(btn.dataset.archive);
           });
         });
+      });
+      container.querySelectorAll('[data-history]').forEach(btn => {
+        btn.addEventListener('click', () => openHistory(btn.dataset.history));
       });
 
       container.querySelectorAll('.habit-info[data-edit]').forEach(el => {
@@ -1040,6 +1186,13 @@
         toggle.style.display = '';
         Toast.show('Привычка добавлена');
       });
+
+      document.getElementById('habit-history-close-btn').addEventListener('click', closeHistory);
+      document.getElementById('habit-history-panel').addEventListener('click', (e) => {
+        if (e.target.id === 'habit-history-panel') closeHistory();
+      });
+      document.getElementById('habit-history-prev-btn').addEventListener('click', () => navHistory(-1));
+      document.getElementById('habit-history-next-btn').addEventListener('click', () => navHistory(1));
     }
 
     return { init, wireForm };
